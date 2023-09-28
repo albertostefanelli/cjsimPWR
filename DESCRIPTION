@@ -1,0 +1,16 @@
+Package: cjsimPWR
+Type: Package
+Title: Power Analyses for Conjoint Experiments Using Simulation Techniques
+Version: 0.1.0
+Author@R: c(person("Alberto", "Stefanelli", email = "alberto.stefanelli@kuleuven.be",
+                  role = c("aut", "cre")),
+           person("Martin", "Kukac", email = "m.b.lukac@gmail.com",
+                  role = c("aut", "cre")),
+Maintainer: Alberto Stefanelli <alberto.stefanelli@kuleuven.be>
+Description: Simulates conjoint data and calculates power, Type M and Type S error using the framework developed by Stefanelli, A., & Lukac, M. (2020). 
+License: What license is it under?
+Encoding: UTF-8
+LazyData: true
+Depends: R (>= 3.1), dplyr, tidyverse, future.apply, progressr, marginaleffects, parallel
+Imports: dplyr, tidyverse, future.apply, progressr, marginaleffects, parallel
+RoxygenNote: 7.2.1
