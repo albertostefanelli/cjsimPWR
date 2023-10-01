@@ -72,9 +72,10 @@ sim_cj <- function(
 
   simulated_cj_long <- sim_to_long(simulated_cj)
 
-  evaluate <- evaluate.model(simulated_cj_long)
+  evaluate <- evaluate_model(simulated_cj_long, robust = TRUE)
 
   evaluate$sim <- n_sim
+
   if(power){p(sprintf("x=%g", n_sim))}else{}
 
   return(evaluate)

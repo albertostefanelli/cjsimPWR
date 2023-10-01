@@ -1,59 +1,79 @@
-
-#' Generate samples from sub-populations
+#' Generate samples of conjoint profiles drawing from the full factorial design
+#' @description Sample of profiles from the full factorial design. If multiple (sub)populations are present, generate_sample should be repeated for each population
+#' @param design single or a list of dataframe from generate_design()
+#' @param units int; single or a list indicating the number of respondents
+#' @param n_tasks int;  single or a list indicating number of tasks performed by each respondent
+#' @param LOG logical; return debugging information on sample generation
+#' @param group_name character; optional vector of names for the observed populations/subgroups of respondents
 #'
-#' @param design dataframe from generate_design()
-#' @param units int; number of respondents
-#' @param n_tasks int; number of tasks performed by each respondent
-#' @param LOG debugging
-#' @param group_name char; names for the unobserved populations
-#'
-#' @return samples from the full factorial for each sub populations n_population * units * n_tasks
+#' @return Samples from the full factorial for each sub populations n_population * units * n_tasks
 #' @export
 #'
 #' @examples
 #'
+#' conjoint design with 3 attributes with 2, 3, 5 levels respectively
+#' design_example <- generate_design(n_profiles = 2,
+#'  n_attributes = 3,
+#'  n_levels = c(2, 3, 5))
 
-generate_samples <- function(design,         # data frame from generate_design()
-                             units,          # number of respondents
-                             n_tasks,        # number of tasks
+#' Sample of
+#' 100 respondents
+#' w 3 tasks for each respondent
+#' sample <- generate_sample(design = design_example,
+#'                                 units = 100,
+#'                                 n_tasks = 3)
+#'
+#' Sample of
+#' 500 Democratic
+#' 200 Independent
+#' 500 Republican
+#' w 3 tasks for each respondent
+#' sample_usa <- generate_sample(design =  list(design_example, design_example, design_example),
+#'                                units = c(500, 200, 500),
+#'                                n_tasks = 3,
+#'                                group_name = c("Democrat","Independent", "Republican" )
+#'                                )
+#'
+#'
+
+generate_samples <- function(design,
+                             units,
+                             n_tasks,
                              LOG = FALSE,
-                             group_name  = NULL      # name of the group
+                             group_name  = NULL
 ){
 
-  # Generate sub-samples of profiles from the full factorial design
-  # ---------------------------------------------------------------------------
-  # Input: design - dataframe from generate_design()
-  #        units - int; number of respondents
-  #        n_tasks - int; number of tasks performed by each respondent
-  #        group_name - char; names for the unobserved populations
-  #
-  # Output: dataframe - samples from the full factorial for each sub populations
-  #                     n_population * units * n_tasks
-  # ---------------------------------------------------------------------------
 
 
-  if (length(design) == 1){
-    if(LOG){message("========= Generating sample(s) for ", length(design), " population(s) =========")}
-    li <- list(design, units, n_tasks)
-    sb <- pmap(li, generate_sample) %>% reduce(rbind)
-
-    output <- list(data = sb,
-                   inputs = list(
-                     units = units,
-                     n_tasks = n_tasks
-                   ))
-  }else{
-    if(LOG){message("========= Generating sample(s) for ", length(design), " population(s) =========")}
-    li <- list(design, units, n_tasks, group_name)
-    sb <- pmap(li, generate_sample) %>% reduce(rbind)
-
-    output <- list(data = sb,
-                   inputs = list(
-                     units = units,
-                     n_tasks = n_tasks,
-                     group_name = group_name
-                   ))
+  if(is.data.frame(design)){
+    design <- list(design)
   }
 
-  return(output)
+
+  if(LOG){message("========= Generating sample(s) for ", length(design), " population(s) =========")}
+
+  sample <- lapply(seq_along(design), function(d) {
+    if(length(group_name)>1){
+
+
+      df <- sample_n(design[[d]], size = units[[d]] * n_tasks[[d]], replace = TRUE) %>%
+        add_column(id = paste(group_name[[d]],
+                              rep(1:units[[d]], each = n_tasks[[d]]), sep = ''),
+                   .before = "Profile_1_var_1") %>%
+        add_column(id_grp = group_name[[d]], .before = "id")
+
+      return(df)
+    }else{
+
+      df <- sample_n(design[[d]], size = units[[d]] * n_tasks[[d]], replace = TRUE) %>%
+        add_column(id = paste(rep(1:units[[d]], each = n_tasks[[d]]), sep = ''),
+                   .before = "Profile_1_var_1")
+
+      return(df)
+
+    }
+  } ) %>% reduce(rbind)
+
+  return(sample)
+
 }
