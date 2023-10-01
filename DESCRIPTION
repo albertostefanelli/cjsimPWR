@@ -11,6 +11,6 @@ Description: Simulates conjoint data and calculates power, Type M and Type S err
 License: What license is it under?
 Encoding: UTF-8
 LazyData: true
-Depends: R (>= 3.1), dplyr, tidyverse, future.apply, progressr, marginaleffects, parallel, purr
+Depends: R (>= 3.1), dplyr, tidyverse, future.apply, progressr, marginaleffects, parallel, purrr
 Imports:
 RoxygenNote: 7.2.1

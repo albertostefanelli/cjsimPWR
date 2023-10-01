@@ -19,7 +19,7 @@
 #'                                 units = 100,
 #'                                 n_tasks = 3)
 #'
-#' sample_usa <- generate_sample(design =  list(design_example, design_example, design_example),
+#' sample_usa <- generate_samples(design =  list(design_example, design_example, design_example),
 #'                                units = c(500, 200, 500),
 #'                                n_tasks = 3,
 #'                                group_name = c("Democrat","Independent", "Republican" )
@@ -66,7 +66,7 @@ generate_samples <- function(design,
       return(df)
 
     }
-  } ) %>% purr::reduce(rbind)
+  } ) %>% purrr::reduce(rbind)
 
   return(sample)
 
