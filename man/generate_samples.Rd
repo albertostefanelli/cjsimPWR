@@ -2,7 +2,7 @@
 % Please edit documentation in R/generate_samples.R
 \name{generate_samples}
 \alias{generate_samples}
-\title{Generate samples}
+\title{Generate samples of conjoint profiles drawing from the full factorial design}
 \usage{
 generate_samples(design, units, n_tasks, LOG = FALSE, group_name = NULL)
 }
@@ -24,6 +24,11 @@ Samples from the full factorial for each sub populations n_population * units * 
 Sample of profiles from the full factorial design. If multiple (sub)populations are present, generate_sample should be repeated for each population
 }
 \examples{
+
+conjoint design with 3 attributes with 2, 3, 5 levels respectively
+design_example <- generate_design(n_profiles = 2,
+ n_attributes = 3,
+ n_levels = c(2, 3, 5))
 Sample of
 100 respondents
 w 3 tasks for each respondent
@@ -39,7 +44,8 @@ w 3 tasks for each respondent
 sample_usa <- generate_sample(design =  list(design_example, design_example, design_example),
                                units = c(500, 200, 500),
                                n_tasks = 3,
-                               group_name = c("Democrat","Independent", "Republican" ))
+                               group_name = c("Democrat","Independent", "Republican" )
+                               )
 
 
 }

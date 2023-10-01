@@ -11,28 +11,19 @@
 #'
 #' @examples
 #'
-#' conjoint design with 3 attributes with 2, 3, 5 levels respectively
 #' design_example <- generate_design(n_profiles = 2,
 #'  n_attributes = 3,
 #'  n_levels = c(2, 3, 5))
-#' Sample of
-#' 100 respondents
-#' w 3 tasks for each respondent
+#'
 #' sample <- generate_sample(design = design_example,
 #'                                 units = 100,
 #'                                 n_tasks = 3)
 #'
-#' Sample of
-#' 500 Democratic
-#' 200 Independent
-#' 500 Republican
-#' w 3 tasks for each respondent
 #' sample_usa <- generate_sample(design =  list(design_example, design_example, design_example),
 #'                                units = c(500, 200, 500),
 #'                                n_tasks = 3,
 #'                                group_name = c("Democrat","Independent", "Republican" )
 #'                                )
-#'
 #'
 
 generate_samples <- function(design,
