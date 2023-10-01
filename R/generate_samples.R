@@ -15,7 +15,7 @@
 #'  n_attributes = 3,
 #'  n_levels = c(2, 3, 5))
 #'
-#' sample <- generate_sample(design = design_example,
+#' sample <- generate_samples(design = design_example,
 #'                                 units = 100,
 #'                                 n_tasks = 3)
 #'
@@ -25,6 +25,10 @@
 #'                                group_name = c("Democrat","Independent", "Republican" )
 #'                                )
 #'
+#'
+#'
+#'
+
 
 generate_samples <- function(design,
                              units,
@@ -62,7 +66,7 @@ generate_samples <- function(design,
       return(df)
 
     }
-  } ) %>% reduce(rbind)
+  } ) %>% purr::reduce(rbind)
 
   return(sample)
 
