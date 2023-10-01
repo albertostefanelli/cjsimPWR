@@ -12,5 +12,5 @@ License: What license is it under?
 Encoding: UTF-8
 LazyData: true
 Depends: R (>= 3.1), dplyr, tidyverse, future.apply, progressr, marginaleffects, parallel
-Imports: dplyr, tidyverse, future.apply, progressr, marginaleffects, parallel
+Imports:
 RoxygenNote: 7.2.1

@@ -15,7 +15,6 @@
 #' design_example <- generate_design(n_profiles = 2,
 #'  n_attributes = 3,
 #'  n_levels = c(2, 3, 5))
-
 #' Sample of
 #' 100 respondents
 #' w 3 tasks for each respondent
