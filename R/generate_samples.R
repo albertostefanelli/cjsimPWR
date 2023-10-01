@@ -46,13 +46,14 @@ generate_samples <- function(design,
 
 
   if(LOG){message("========= Generating sample(s) for ", length(design), " population(s) =========")}
+  if(!length(group_name) == length(design)){error("Length of group_namE does not match the lenght of the other arguments")}
+  if(!length(n_tasks) == length(design)){error("Length of n_tasks does not match the lenght of the other arguments")}
+  if(!length(units) == length(design)){error("Length of units does not match the lenght of the other arguments")}
 
   sample <- lapply(seq_along(design), function(d) {
     if(length(group_name)>1){
 
-      if(!length(group_name) == length(design)){error("Length of group_name argument does not match the lenght of the other arguments")}
-      if(!length(n_tasks) == length(design)){error("Length of n_tasks does not match the lenght of the other arguments")}
-      if(!length(units) == length(design)){error("Length of units does not match the lenght of the other arguments")}
+
 
       df <- sample_n(design[[d]], size = units[[d]] * n_tasks[[d]], replace = TRUE) %>%
         add_column(id = paste(group_name[[d]],

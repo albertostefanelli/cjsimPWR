@@ -25,6 +25,7 @@ Sample of profiles from the full factorial design. If multiple (sub)populations 
 }
 \examples{
 
+conjoint design with 3 attributes with 2, 3, 5 levels respectively
 design_example <- generate_design(n_profiles = 2,
  n_attributes = 3,
  n_levels = c(2, 3, 5))
