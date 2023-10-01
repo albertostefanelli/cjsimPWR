@@ -39,4 +39,7 @@ sample_usa <- generate_samples(design =  list(design_example, design_example, de
                                group_name = c("Democrat","Independent", "Republican" )
                                )
 
+
+
+
 }

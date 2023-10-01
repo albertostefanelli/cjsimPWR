@@ -11,6 +11,7 @@
 #'
 #' @examples
 #'
+#' conjoint design with 3 attributes with 2, 3, 5 levels respectively
 #' design_example <- generate_design(n_profiles = 2,
 #'  n_attributes = 3,
 #'  n_levels = c(2, 3, 5))
@@ -49,6 +50,7 @@ generate_samples <- function(design,
   sample <- lapply(seq_along(design), function(d) {
     if(length(group_name)>1){
 
+      if(!length(n_tasks) == length(group_name)){error("Number of tasks does not match the lenght of the other arguments")}
 
       df <- sample_n(design[[d]], size = units[[d]] * n_tasks[[d]], replace = TRUE) %>%
         add_column(id = paste(group_name[[d]],
