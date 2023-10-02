@@ -2,7 +2,7 @@
 % Please edit documentation in R/power_sim.R
 \name{power_sim}
 \alias{power_sim}
-\title{Title}
+\title{Generate and evaluate a conjoint experiment based on the design specification.}
 \usage{
 power_sim(
   n_attributes = NULL,
@@ -19,8 +19,84 @@ power_sim(
 )
 }
 \arguments{
-\item{p}{}
+\item{n_attributes}{int; number of independent variables (i.e. treatments) in the conjoint experiment.}
+
+\item{n_levels}{int; vector of integers of length n_attributes; number of levels of variables should be > 1.}
+
+\item{group_name}{character; optional vector of names for the observed populations/subgroups of respondents.}
+
+\item{units}{int; single or a list indicating the number of respondents.}
+
+\item{n_tasks}{int;  single or a list indicating number of tasks performed by each respondent.}
+
+\item{true_coef}{vector or list of vectors; hypothesized (true) coefficients for all parameters to be estimated. The coefficients must be in order, e.g., var_1_lvl_1, var_1_lvl2, var_2_lvl1, var_2_lvl2.}
+
+\item{sigma.u_k}{int; standard deviation of the treatment effect for each variable/level for each respondent.}
+
+\item{sim_runs}{int; number of simulations to perform. Larger numbers correspond to more precise estimates.}
+
+\item{seed}{int; the initial seed used in the simulation. The RNG reproducibility is achieved by pre-generating the random seeds for all iterations of the simulation such that the seeds always returns the exact same sequence of random numbers given the specified seed. See future_lapply for more information.}
+
+\item{n_sim}{internal parameter, numeric; number of the simulation.}
+
+\item{p}{internal parameter, numeric; passes the progress progression indicator to power_sim().}
+}
+\value{
+dataframe; a dataframe containing the results of the evaluation procedure and the design specification
+- num_respondents: int; total number or respondents.
+- num_attrbs: int; total number of attributes included in the conjoint experiment.
+- num_tasks: int; total number of task taken by each respondent.
+- id_grp: character; name of the sub-population of interest.
+- attrb: int; name of the attribute included in the conjoint design. At the moment these cannot be changed and are in the format var_1 ... var_x.
+- level: int; levels of each attribute.
+- true_coef: numeric; coefficient from true_coefs.
+- estimate: numeric; estimated coefficient from the linear probability model .
+- std.error[.robust]: numeric; estimated (robust) standard error.
+- ci[_robust]_lower: numeric; lower bound of the confidence interval calculated (level= 0.95).
+- ci[_robust]_upper: numeric;upper bound of the confidence interval calculated (level= 0.95).
+- in_ci[_robust]: logical, if the true_coef is contained in the confidence level.
+- sig[_robust]: logical, if the estimate coefficient (estimate) is significant (alpha = 0.05).
+- typeS[_robust]: logical; if significant, did the sign of estimated coefficient (estimate) match to true coefficient? (see, Gelman and Carlin, 2014).
+- typeM[_robust]: numeric; if significant, ratio of estimated/true coefficient (see, Gelman and Carlin, 2014).
 }
 \description{
-Title
+The function constructs a full factorial experimental design based on the design specification, generates samples of conjoint profiles drawing from the full factorial design, and evaluate the simulated conjoint process of profile selection against the hypothesized true coefficients.
+}
+\examples{
+
+# Simulated power, Type M, and Type S error
+# for a conjoint design with no observed sub-groups of respondents.
+df_power <- power_sim(
+          n_attributes = 3,
+          n_levels = c(2, 3, 5),
+          n_tasks = 4,
+          units = c(500),
+          true_coef = list(0.2, c(-0.1, 0.1), c(-0.1, -0.1, -0.1, 0.1)),
+          sigma.u_k = 0.05,
+          seed = 92,
+          sim_runs = 30)
+
+## Close the PSOCK cluster created with future
+if (!inherits(future::plan(), "sequential")){future::plan("sequential")}
+
+# Simulated power, Type M, and Type S error
+# for a conjoint design with 3 observed sub-groups of respondents.
+df_cj <- power_sim(
+          n_attributes = 3,
+          n_levels = c(2, 3, 5),
+          n_tasks = 3,
+          group_name = c("Democrat", "Independent", "Republican"),
+          units = c(500, 200, 500),
+         true_coef = list("Democrat" = list(0.2, c(-0.1, 0.1), c(-0.1, -0.1, -0.1, 0.1)),
+                          "Independent" = list(0.1, c(-0.2, -0.05),  c(-0.1, 0.1, 0.1, 0.3)),
+                          "Republican" = list(0.1, c(-0.1, 0.05),  c(-0.1, 0.2, -0.1, 0.1))
+                             ),
+         sigma.u_k = 0.05,
+         seed = 78,
+         sim_runs = 30)
+## Close the PSOCK cluster created with future
+ if (!inherits(future::plan(), "sequential")){future::plan("sequential")}
+
+
+
 }

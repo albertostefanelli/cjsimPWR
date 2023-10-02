@@ -2,45 +2,46 @@
 % Please edit documentation in R/generate_samples.R
 \name{generate_samples}
 \alias{generate_samples}
-\title{Generate samples of conjoint profiles drawing from the full factorial design}
+\title{Generate samples of conjoint profiles drawing from the full factorial design.}
 \usage{
 generate_samples(design, units, n_tasks, LOG = FALSE, group_name = NULL)
 }
 \arguments{
-\item{design}{single or a list of dataframe from generate_design()}
+\item{design}{single or a list of dataframe from generate_design().}
 
-\item{units}{int; single or a list indicating the number of respondents}
+\item{units}{int; single or a list indicating the number of respondents.}
 
-\item{n_tasks}{int;  single or a list indicating number of tasks performed by each respondent}
+\item{n_tasks}{int;  single or a list indicating number of tasks performed by each respondent.}
 
-\item{LOG}{logical; return debugging information on sample generation}
+\item{LOG}{logical; return debugging information on sample generation.}
 
-\item{group_name}{character; optional vector of names for the observed populations/subgroups of respondents}
+\item{group_name}{character; optional vector of names for the observed populations/subgroups of respondents.}
 }
 \value{
-Samples from the full factorial for each sub populations n_population * units * n_tasks
+A list containing (a) dataframe with samples for a single or multiple [sub]populations (n = [n_population *] units * n_tasks) of respondents and (b) the design specifications listed in generate_design() and generate_samples().
 }
 \description{
-Sample of profiles from the full factorial design. If multiple (sub)populations are present, generate_sample should be repeated for each population
+Sample of profiles from the full factorial design. If multiple (sub)populations are present, generate_samples() generates a sample for each population.
 }
 \examples{
-
-conjoint design with 3 attributes with 2, 3, 5 levels respectively
+# Conjoint design with 3 attributes with 2, 3, 5 levels respectively
 design_example <- generate_design(n_profiles = 2,
  n_attributes = 3,
  n_levels = c(2, 3, 5))
 
+# Design without multiple groups/sub-populations:
+# Random sample of 100 respondents w 3 tasks for each respondent
 sample <- generate_samples(design = design_example,
                                 units = 100,
                                 n_tasks = 3)
 
-sample_usa <- generate_samples(design =  list(design_example, design_example, design_example),
+# Design with multiple groups/sub-populations:
+# Random sample of 500 Democratic, 200 Independent, 500 Republican respondents
+# w 3 tasks for each respondent
+sample_subgrp <- generate_samples(design =  list(design_example, design_example, design_example),
                                units = c(500, 200, 500),
-                               n_tasks = 3,
+                               n_tasks = c(3, 3, 3),
                                group_name = c("Democrat","Independent", "Republican" )
                                )
-
-
-
 
 }

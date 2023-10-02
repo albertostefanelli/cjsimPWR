@@ -1,35 +1,35 @@
-#' Generate samples of conjoint profiles drawing from the full factorial design
-#' @description Sample of profiles from the full factorial design. If multiple (sub)populations are present, generate_sample should be repeated for each population
-#' @param design single or a list of dataframe from generate_design()
-#' @param units int; single or a list indicating the number of respondents
-#' @param n_tasks int;  single or a list indicating number of tasks performed by each respondent
-#' @param LOG logical; return debugging information on sample generation
-#' @param group_name character; optional vector of names for the observed populations/subgroups of respondents
+#' Generate samples of conjoint profiles drawing from the full factorial design.
+#' @description Sample of profiles from the full factorial design. If multiple (sub)populations are present, generate_samples() generates a sample for each population.
+#' @param design single or a list of dataframe from generate_design().
+#' @param units int; single or a list indicating the number of respondents.
+#' @param n_tasks int;  single or a list indicating number of tasks performed by each respondent.
+#' @param LOG logical; return debugging information on sample generation.
+#' @param group_name character; optional vector of names for the observed populations/subgroups of respondents.
 #'
-#' @return Samples from the full factorial for each sub populations n_population * units * n_tasks
+#' @return A list containing (a) dataframe with samples for a single or multiple [sub]populations (n = [n_population *] units * n_tasks) of respondents and (b) the design specifications listed in generate_design() and generate_samples().
 #' @export
 #'
 #' @examples
-#'
-#' conjoint design with 3 attributes with 2, 3, 5 levels respectively
+#' # Conjoint design with 3 attributes with 2, 3, 5 levels respectively
 #' design_example <- generate_design(n_profiles = 2,
 #'  n_attributes = 3,
 #'  n_levels = c(2, 3, 5))
 #'
+#' # Design without multiple groups/sub-populations:
+#' # Random sample of 100 respondents w 3 tasks for each respondent
 #' sample <- generate_samples(design = design_example,
 #'                                 units = 100,
 #'                                 n_tasks = 3)
 #'
-#' sample_usa <- generate_samples(design =  list(design_example, design_example, design_example),
+#' # Design with multiple groups/sub-populations:
+#' # Random sample of 500 Democratic, 200 Independent, 500 Republican respondents
+#' # w 3 tasks for each respondent
+#' sample_subgrp <- generate_samples(design =  list(design_example, design_example, design_example),
 #'                                units = c(500, 200, 500),
-#'                                n_tasks = 3,
+#'                                n_tasks = c(3, 3, 3),
 #'                                group_name = c("Democrat","Independent", "Republican" )
 #'                                )
 #'
-#'
-#'
-#'
-
 
 generate_samples <- function(design,
                              units,
@@ -39,31 +39,40 @@ generate_samples <- function(design,
 ){
 
 
-
+  # for experiments without sub-groups, transform the design object in a list for lapply
+  # if the object is already a list, skip
   if(is.data.frame(design)){
     design <- list(design)
   }
 
-
   if(LOG){message("========= Generating sample(s) for ", length(design), " population(s) =========")}
-  if(!length(group_name) == length(design)){error("Length of group_namE does not match the lenght of the other arguments")}
-  if(!length(n_tasks) == length(design)){error("Length of n_tasks does not match the lenght of the other arguments")}
-  if(!length(units) == length(design)){error("Length of units does not match the lenght of the other arguments")}
+  # check if length arguments match the design length
+  if(!length(n_tasks) == length(design)){stop("Length of n_tasks does not match the lenght of the other arguments.")}
+  if(!length(units) == length(design)){stop("Length of units does not match the lenght of the other arguments.")}
 
   sample <- lapply(seq_along(design), function(d) {
     if(length(group_name)>1){
 
+      # if there is more than 1 group_name (i.e., presence of sub-populations), check whether the number of designs is the same as the number of sub populations.
+      if(!length(group_name) == length(design)){stop("Length of group_name does not match the lenght of the other arguments.")}
 
-
+      # sample from the full factorial and add id (respondent id) and id_group (sub-population id)
       df <- sample_n(design[[d]], size = units[[d]] * n_tasks[[d]], replace = TRUE) %>%
         add_column(id = paste(group_name[[d]],
                               rep(1:units[[d]], each = n_tasks[[d]]), sep = ''),
                    .before = "Profile_1_var_1") %>%
         add_column(id_grp = group_name[[d]], .before = "id")
 
+      output <- list(data = df,
+                     inputs = list(
+                       units = units,
+                       n_tasks = n_tasks
+                     ))
+
       return(df)
     }else{
 
+      # sample from the full factorial and add only id (respondent id)
       df <- sample_n(design[[d]], size = units[[d]] * n_tasks[[d]], replace = TRUE) %>%
         add_column(id = paste(rep(1:units[[d]], each = n_tasks[[d]]), sep = ''),
                    .before = "Profile_1_var_1")
@@ -71,8 +80,30 @@ generate_samples <- function(design,
       return(df)
 
     }
-  } ) %>% purrr::reduce(rbind)
+  } )
 
-  return(sample)
+    # rbind the data frames generated by lapply
+    sample_rbind <- purrr::reduce(sample, rbind)
 
+    if(length(group_name)>1){
+
+      output <- list(data = sample_rbind,
+                     inputs = list(
+                       units = units,
+                       n_tasks = n_tasks,
+                       group_name = group_name
+                     ))
+
+
+  }else{
+
+    output <- list(data = sample_rbind,
+                   inputs = list(
+                     units = units,
+                     n_tasks = n_tasks
+                     ))
+  }
+
+  return(output)
 }
+
