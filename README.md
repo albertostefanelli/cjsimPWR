@@ -35,10 +35,10 @@ treatment effect (i.e., AMCE) is either (1) considered to be homogeneous
 across all respondents or (2) expected to differ substantially across
 different segments of the population. In the latter case, the effect of
 an experimental attribute may vary depending on some respondent’s
-characteristics [e.g., Kirkland and Coppock
-2018](https://link.springer.com/article/10.1007/s11109-017-9414-8). In
+characteristics [(e.g., Kirkland, P. A., & Coppock, A.,
+2018)](https://link.springer.com/article/10.1007/s11109-017-9414-8). In
 such cases, AMCEs and the resulting power measures are calculated
-through subgroup analysis (see, [Leeper, T., Hobolt, S., & Tilley, J.,
+through subgroup analysis (see [Leeper, T., Hobolt, S., & Tilley, J.,
 2020](https://www.cambridge.org/core/journals/political-analysis/article/abs/measuring-subgroup-preferences-in-conjoint-experiments/4F2C21AC02753F1FFF2F5EA0F943C1B2))
 
 `power_sim()` calculates power measures using cluster-robust standard
