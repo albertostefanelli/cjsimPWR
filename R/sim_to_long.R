@@ -35,9 +35,9 @@ sim_to_long <- function(input){
 
 
   # Add task indicator
-  data_final <- data_final %>%
-    mutate(y2 = ifelse(y1 == 1, 0, 1)) %>%
-    group_by(id) %>%
+  data_final <- data_final |>
+    mutate(y2 = ifelse(y1 == 1, 0, 1)) |>
+    group_by(id) |>
     mutate(task = seq(from = 1,
                       to = input$inputs$n_tasks[1],
                       by = 1))
@@ -49,8 +49,8 @@ sim_to_long <- function(input){
   if (grps_num == 1) {
     # Wide to long format
     # Split into two
-    data_final %>% ungroup() |> select(id, task, starts_with("Profile_1"), y1) -> p1
-    data_final %>% ungroup() |> select(id, task, starts_with("Profile_2"), y2) -> p2
+    data_final |> ungroup() |> select(id, task, starts_with("Profile_1"), y1) -> p1
+    data_final |> ungroup() |> select(id, task, starts_with("Profile_2"), y2) -> p2
 
     # Rename vars to match
     # Profile 1
@@ -68,9 +68,9 @@ sim_to_long <- function(input){
 
 
     # Combine in one dataframe
-    stack <- rbind(p1,p2) %>%
-      arrange(id, task) %>%
-      ungroup() %>%
+    stack <- rbind(p1,p2) |>
+      arrange(id, task) |>
+      ungroup() |>
       mutate_at(vars(starts_with("var_")), factor)
 
     input$data <- stack
@@ -79,8 +79,8 @@ sim_to_long <- function(input){
 
     # Wide to long format
     # Split into two
-    data_final %>% ungroup() |> select(id_grp, id, task, starts_with("Profile_1"), y1) -> p1
-    data_final %>% ungroup() |> select(id_grp, id, task, starts_with("Profile_2"), y2) -> p2
+    data_final |> ungroup() |> select(id_grp, id, task, starts_with("Profile_1"), y1) -> p1
+    data_final |> ungroup() |> select(id_grp, id, task, starts_with("Profile_2"), y2) -> p2
     # Rename vars to match
     # Profile 1
     names(p1)[grep("Profile_", names(p1))] <- paste0("var_",
@@ -97,10 +97,10 @@ sim_to_long <- function(input){
 
 
     # Combine in one dataframe
-    stack <- rbind(p1,p2) %>%
-      arrange(id, task) %>%
-      ungroup() %>%
-      mutate_at(vars(starts_with("var_")), factor) %>%
+    stack <- rbind(p1,p2) |>
+      arrange(id, task) |>
+      ungroup() |>
+      mutate_at(vars(starts_with("var_")), factor) |>
       mutate_at(vars(id_grp), factor)
 
     input$data <- stack

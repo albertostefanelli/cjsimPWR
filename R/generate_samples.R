@@ -57,10 +57,10 @@ generate_samples <- function(design,
       if(!length(group_name) == length(design)){stop("Length of group_name does not match the lenght of the other arguments.")}
 
       # sample from the full factorial and add id (respondent id) and id_group (sub-population id)
-      df <- sample_n(design[[d]], size = units[[d]] * n_tasks[[d]], replace = TRUE) %>%
+      df <- sample_n(design[[d]], size = units[[d]] * n_tasks[[d]], replace = TRUE) |>
         add_column(id = paste(group_name[[d]],
                               rep(1:units[[d]], each = n_tasks[[d]]), sep = ''),
-                   .before = "Profile_1_var_1") %>%
+                   .before = "Profile_1_var_1") |>
         add_column(id_grp = group_name[[d]], .before = "id")
 
       output <- list(data = df,
@@ -73,7 +73,7 @@ generate_samples <- function(design,
     }else{
 
       # sample from the full factorial and add only id (respondent id)
-      df <- sample_n(design[[d]], size = units[[d]] * n_tasks[[d]], replace = TRUE) %>%
+      df <- sample_n(design[[d]], size = units[[d]] * n_tasks[[d]], replace = TRUE) |>
         add_column(id = paste(rep(1:units[[d]], each = n_tasks[[d]]), sep = ''),
                    .before = "Profile_1_var_1")
 

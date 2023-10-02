@@ -230,7 +230,7 @@ evaluate_model <- function(input,
   mm$num_tasks <- num_tasks
   mm$grps_num <- grps_num
 
-  mm <- mm %>% rename(`level` = `n_coef`,
+  mm <- mm |> rename(`level` = `n_coef`,
                       `attrb` = `term`
   )
 
