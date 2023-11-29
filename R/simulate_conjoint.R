@@ -210,7 +210,8 @@ simulate_conjoint <- function(input,
         dfrandom <- data.frame(id=unique(data[, 'id']), reff=rep(rnorm(length(unique(data[, 'id'])),
                   mean = 0, sd = sigma.u_k)
         ))
-        # rename the the column to match the  ame of each variable-level random effect
+
+        # rename the the column to match the name of each variable-level random effect
         names(dfrandom)[grep("reff", names(dfrandom))] <- paste0(reff_u)
         # bind by id such that for each variable-level the individual random effect is the same within the variable
         data <- left_join(data, dfrandom, by="id")
@@ -226,7 +227,6 @@ simulate_conjoint <- function(input,
         data[,paste0("probability_p1")] <- data[, paste0("probability_p1")] +
           data[, paste0(coef_x)] * ifelse(data[, paste0("Profile_1_var_", var)] == lvl, 1, 0)
 
-        options(scipen=9999)
         # Debug message:
         if(LOG){
           message("= Multiplying: G", " = ", coef_x, " * ", "Profile_1_var_",

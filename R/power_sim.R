@@ -132,7 +132,7 @@ power_sim <- function(
   if(is.null(group_name)){
     summary <- bin_sim |> group_by(attrb, level, true_coef, seed) |>
       summarise_at(vars(sig_robust, in_ci_robust, typeS_robust, typeM_robust),list(~sd(.x, na.rm=TRUE),~mean(.x, na.rm=TRUE) )) |>
-      mutate(sig_robust_mean = paste0(format(round(sig_robust_mean,digits=2),nsmall=2), " (", format(round(sig_robust_mean,digits=2),nsmall=2), ")" ),
+      mutate(sig_robust_mean = paste0(format(round(sig_robust_mean,digits=2),nsmall=2), " (", format(round(sig_robust_sd,digits=2),nsmall=2), ")" ),
              in_ci95_robust_mean = paste0(format(round(in_ci_robust_mean,digits=2),nsmall=2), " (", format(round(in_ci_robust_sd,digits=2),nsmall=2), ")" ),
              typeS_robust_mean= paste0(format(round(typeS_robust_mean,digits=2),nsmall=2), " (",format(round(typeS_robust_sd,digits=2),nsmall=2), ")" ),
              typeM_robust_mean= paste0(format(round(typeM_robust_mean,digits=2),nsmall=2), " (", format(round(typeM_robust_sd,digits=2),nsmall=2), ")" )
@@ -145,7 +145,7 @@ power_sim <- function(
   }else{
     summary <- bin_sim |> group_by(id_grp, attrb, level, true_coef, seed) |>
       summarise_at(vars(sig_robust, in_ci_robust, typeS_robust, typeM_robust),list(~sd(.x, na.rm=TRUE),~mean(.x, na.rm=TRUE) )) |>
-      mutate(sig_robust_mean = paste0(format(round(sig_robust_mean,digits=2),nsmall=2), " (", format(round(sig_robust_mean,digits=2),nsmall=2), ")" ),
+      mutate(sig_robust_mean = paste0(format(round(sig_robust_mean,digits=2),nsmall=2), " (", format(round(sig_robust_sd,digits=2),nsmall=2), ")" ),
              in_ci95_robust_mean = paste0(format(round(in_ci_robust_mean,digits=2),nsmall=2), " (", format(round(in_ci_robust_sd,digits=2),nsmall=2), ")" ),
              typeS_robust_mean= paste0(format(round(typeS_robust_mean,digits=2),nsmall=2), " (",format(round(typeS_robust_sd,digits=2),nsmall=2), ")" ),
              typeM_robust_mean= paste0(format(round(typeM_robust_mean,digits=2),nsmall=2), " (", format(round(typeM_robust_sd,digits=2),nsmall=2), ")" )

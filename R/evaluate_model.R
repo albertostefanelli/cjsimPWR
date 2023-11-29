@@ -117,7 +117,7 @@ evaluate_model <- function(input,
 
     # model formula with interaction between attributes and id_grp (i.e., sub-population indicator)
     model_formula <- as.formula(paste("y ~", paste0("var_", 1:num_attrbs, "*id_grp" , collapse= " + " )))
-    # LPM using GLM gaussian family
+    # LPM using GLM Gaussian family
     mod <- glm(model_formula, data = input$data,
                family=gaussian(link="identity"))
 
@@ -221,7 +221,6 @@ evaluate_model <- function(input,
 
   # # If significant, Type M
   mm$typeM <- ifelse(mm$sig, mm$estimate / mm$true_coef, NA)
-
   mm$typeM_robust <- ifelse(mm$sig_robust, mm$estimate / mm$true_coef, NA)
 
   # inputs to be passed to the result obj
