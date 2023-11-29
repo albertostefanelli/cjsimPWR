@@ -31,6 +31,32 @@
 #'
 #'
 
+### Debug
+# design_example <- generate_design(n_profiles = 2,
+#                                   n_attributes = 6,
+#                                   n_levels = c(2, 5, 2, 4, 3, 4))
+#
+# sample_subgrp <- generate_samples(design =  list(design_example),
+#                                              units = c(500),
+#                                              n_tasks = c(2)
+#                                           )
+#
+# table(sample_subgrp$data$Profile_1_var_1)
+# table(sample_subgrp$data$Profile_1_var_2)
+# table(sample_subgrp$data$Profile_1_var_3)
+# table(sample_subgrp$data$Profile_1_var_6)
+#
+# input <- sample_subgrp
+# true_coef = list(-0.11,
+#                  c(-0.11, 0.11, -0.11, 0.11),
+#                  c(-0.11),
+#                  c(-0.11, 0.11, -0.11),
+#                  c(-0.11, 0.11),
+#                  c(-0.11, 0.11, -0.11)
+# )
+# sigma.u_k = 0.05
+# LOG = TRUE
+
 simulate_conjoint <- function(input,
                               true_coef,
                               sigma.u_k = 0.02,
@@ -73,7 +99,7 @@ simulate_conjoint <- function(input,
   if(num_parameters < length(unlist(true_coef))){stop("Input problem: Too many parameters! \n --> Expected ", num_parameters - 1, " true_coef (sum(num_lvls)*grps_num - 1)." )}
 
 
-  # Get a list of length num_vars and vector of coefs for each (level - 1)
+  # grp_list: a list of length num_vars and vector of coefs for each (level - 1)
   if (grps_num == 1) {
 
     lvls_list <- list()
@@ -176,14 +202,20 @@ simulate_conjoint <- function(input,
 
         # Stage 1: Random effect generation
         # calculate a random effect for each variable/level
+
+        # for each variable-level, create a name for each random effect
         reff_u <- paste0("raneff_u", var, "_lvl", lvl)
 
-        data[, paste0(reff_u)] <- rep(rnorm(length(unique(data[, 'id'])),
-                                            mean = 0, sd = sigma.u_k))
+        # dataframe with random effect for each individual
+        dfrandom <- data.frame(id=unique(data[, 'id']), reff=rep(rnorm(length(unique(data[, 'id'])),
+                  mean = 0, sd = sigma.u_k)
+        ))
+        # rename the the column to match the  ame of each variable-level random effect
+        names(dfrandom)[grep("reff", names(dfrandom))] <- paste0(reff_u)
+        # bind by id such that for each variable-level the individual random effect is the same within the variable
+        data <- left_join(data, dfrandom, by="id")
 
-
-
-        # Stage 1: Effect calculation
+        # Stage 2: Effect calculation
         # Calculate respondent specific effect per each variable * (lvl - 1)
         coef_x <- paste0("cx", var, "_lvl", lvl)
         # [resp.-spec. coef]        [average effect]   +   [random effect respondent]
@@ -194,6 +226,7 @@ simulate_conjoint <- function(input,
         data[,paste0("probability_p1")] <- data[, paste0("probability_p1")] +
           data[, paste0(coef_x)] * ifelse(data[, paste0("Profile_1_var_", var)] == lvl, 1, 0)
 
+        options(scipen=9999)
         # Debug message:
         if(LOG){
           message("= Multiplying: G", " = ", coef_x, " * ", "Profile_1_var_",
@@ -222,6 +255,19 @@ simulate_conjoint <- function(input,
           #     indiv_coef_x = true_coef_x + random_effect_u_x
 
           # Stage 1: Random effect generation
+
+          #FIX ME WITH THIS CODE - prob neeed to bind by p
+          # reff_u <- paste0("raneff_u", var, "_lvl", lvl)
+          #
+          # # dataframe with random effect for each individual
+          # dfrandom <- data.frame(id=unique(data[, 'id']), reff=rep(rnorm(length(unique(data[, 'id'])),
+          #                                                                mean = 0, sd = sigma.u_k)
+          # ))
+          # # rename the the column to match the  ame of each variable-level random effect
+          # names(dfrandom)[grep("reff", names(dfrandom))] <- paste0(reff_u)
+          # # bind by id such that for each variable-level the individual random effect is the same within the variable
+          # data <- left_join(data, dfrandom, by="id")
+
           # calculate a random effect for each variable/level
           reff_u <- paste0("raneff_u", var, "_lvl", lvl)
 
@@ -269,7 +315,8 @@ simulate_conjoint <- function(input,
   prob_choose_p1 <- odds_choose_p1 / (1 + odds_choose_p1)
 
   # Generate selections with rbinom()
-  selected_p1 <- rbinom(n = length(prob_choose_p1), size = 1,
+  selected_p1 <- rbinom(n = length(prob_choose_p1),
+                        size = 1,
                         prob = prob_choose_p1)
 
   # Gather everything into one dataframe
