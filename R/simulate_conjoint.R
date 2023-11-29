@@ -35,28 +35,28 @@
 
 
 # DEBUG MULTI-GROUPS
-
-design_example <- generate_design(n_profiles = 2,
- n_attributes = 3,
- n_levels = c(2, 3, 5))
-
-# Design with multiple groups/sub-populations:
-# random sample of 500 Democratic, 200 Independent, 500 Republican respondents
-sample_subgrp <- generate_samples(design =  list(design_example, design_example, design_example),
-                               units = c(500, 200, 500),
-                               n_tasks = c(3, 3, 3),
-                               group_name = c("Democrat","Independent", "Republican" )
-                               )
-
-input <- sample_subgrp
-
-# Simulated data using the coefficients contained in true_coef for each subgroup of respondents
-simulated_cj <- simulate_conjoint(sample_subgrp,
-            true_coef = list("Democrat" = list(0.2, c(-0.1, 0.1), c(-0.1, -0.1, -0.1, 0.1)),
-                             "Independent" = list(0.1, c(-0.2, -0.05),  c(-0.1, 0.1, 0.1, 0.3)),
-                             "Republican" = list(0.1, c(-0.1, 0.05),  c(-0.1, 0.2, -0.1, 0.1))),
-           sigma.u_k = 0.05,
-           LOG = TRUE)
+#
+# design_example <- generate_design(n_profiles = 2,
+#  n_attributes = 3,
+#  n_levels = c(2, 3, 5))
+#
+# # Design with multiple groups/sub-populations:
+# # random sample of 500 Democratic, 200 Independent, 500 Republican respondents
+# sample_subgrp <- generate_samples(design =  list(design_example, design_example, design_example),
+#                                units = c(500, 200, 500),
+#                                n_tasks = c(3, 3, 3),
+#                                group_name = c("Democrat","Independent", "Republican" )
+#                                )
+#
+# input <- sample_subgrp
+#
+# # Simulated data using the coefficients contained in true_coef for each subgroup of respondents
+# simulated_cj <- simulate_conjoint(sample_subgrp,
+#             true_coef = list("Democrat" = list(0.2, c(-0.1, 0.1), c(-0.1, -0.1, -0.1, 0.1)),
+#                              "Independent" = list(0.1, c(-0.2, -0.05),  c(-0.1, 0.1, 0.1, 0.3)),
+#                              "Republican" = list(0.1, c(-0.1, 0.05),  c(-0.1, 0.2, -0.1, 0.1))),
+#            sigma.u_k = 0.05,
+#            LOG = TRUE)
 
 
 
