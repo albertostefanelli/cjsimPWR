@@ -30,6 +30,35 @@
 #'            LOG = FALSE)
 #'
 #'
+#'
+#'
+
+
+# DEBUG MULTI-GROUPS
+
+design_example <- generate_design(n_profiles = 2,
+ n_attributes = 3,
+ n_levels = c(2, 3, 5))
+
+# Design with multiple groups/sub-populations:
+# random sample of 500 Democratic, 200 Independent, 500 Republican respondents
+sample_subgrp <- generate_samples(design =  list(design_example, design_example, design_example),
+                               units = c(500, 200, 500),
+                               n_tasks = c(3, 3, 3),
+                               group_name = c("Democrat","Independent", "Republican" )
+                               )
+
+input <- sample_subgrp
+
+# Simulated data using the coefficients contained in true_coef for each subgroup of respondents
+simulated_cj <- simulate_conjoint(sample_subgrp,
+            true_coef = list("Democrat" = list(0.2, c(-0.1, 0.1), c(-0.1, -0.1, -0.1, 0.1)),
+                             "Independent" = list(0.1, c(-0.2, -0.05),  c(-0.1, 0.1, 0.1, 0.3)),
+                             "Republican" = list(0.1, c(-0.1, 0.05),  c(-0.1, 0.2, -0.1, 0.1))),
+           sigma.u_k = 0.05,
+           LOG = TRUE)
+
+
 
 ### Debug
 # design_example <- generate_design(n_profiles = 2,
@@ -256,18 +285,6 @@ simulate_conjoint <- function(input,
 
           # Stage 1: Random effect generation
 
-          #FIX ME WITH THIS CODE - prob neeed to bind by p
-          # reff_u <- paste0("raneff_u", var, "_lvl", lvl)
-          #
-          # # dataframe with random effect for each individual
-          # dfrandom <- data.frame(id=unique(data[, 'id']), reff=rep(rnorm(length(unique(data[, 'id'])),
-          #                                                                mean = 0, sd = sigma.u_k)
-          # ))
-          # # rename the the column to match the  ame of each variable-level random effect
-          # names(dfrandom)[grep("reff", names(dfrandom))] <- paste0(reff_u)
-          # # bind by id such that for each variable-level the individual random effect is the same within the variable
-          # data <- left_join(data, dfrandom, by="id")
-
           # calculate a random effect for each variable/level
           reff_u <- paste0("raneff_u", var, "_lvl", lvl)
 
@@ -275,8 +292,18 @@ simulate_conjoint <- function(input,
                                                       mean = 0, sd = sigma.u_k),
                                                 each = num_trials[p])
 
+          # # dataframe with random effect for each individual
+          dfrandom <- data.frame(id=unique(data[, 'id']), reff=rep(rnorm(length(unique(data[, 'id'])),
+                                                                         mean = 0, sd = sigma.u_k)
+          ))
 
-          # Stage 1: Effect calculation
+
+          # # rename the the column to match the  ame of each variable-level random effect
+          names(dfrandom)[grep("reff", names(dfrandom))] <- paste0(reff_u)
+          # # bind by id such that for each variable-level the individual random effect is the same within the variable
+          data <- left_join(data, dfrandom, by="id")
+
+          # Stage 2: Effect calculation
           # Calculate respondent specific effect per each variable * (lvl - 1)
           coef_x <- paste0("cx", var, "_lvl", lvl)
           # [resp.-spec. coef]        [average effect]   +   [random effect respondent]
