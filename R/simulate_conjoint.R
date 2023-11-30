@@ -34,8 +34,8 @@
 #'
 
 
-# DEBUG MULTI-GROUPS
-#
+#DEBUG MULTI-GROUPS
+
 # design_example <- generate_design(n_profiles = 2,
 #  n_attributes = 3,
 #  n_levels = c(2, 3, 5))
@@ -51,12 +51,11 @@
 # input <- sample_subgrp
 #
 # # Simulated data using the coefficients contained in true_coef for each subgroup of respondents
-# simulated_cj <- simulate_conjoint(sample_subgrp,
-#             true_coef = list("Democrat" = list(0.2, c(-0.1, 0.1), c(-0.1, -0.1, -0.1, 0.1)),
+# true_coef = list("Democrat" = list(0.2, c(-0.1, 0.1), c(-0.1, -0.1, -0.1, 0.1)),
 #                              "Independent" = list(0.1, c(-0.2, -0.05),  c(-0.1, 0.1, 0.1, 0.3)),
-#                              "Republican" = list(0.1, c(-0.1, 0.05),  c(-0.1, 0.2, -0.1, 0.1))),
-#            sigma.u_k = 0.05,
-#            LOG = TRUE)
+#                              "Republican" = list(0.1, c(-0.1, 0.05),  c(-0.1, 0.2, -0.1, 0.1)))
+# sigma.u_k = 0.05
+# LOG = TRUE
 
 
 
@@ -284,16 +283,13 @@ simulate_conjoint <- function(input,
           #     indiv_coef_x = true_coef_x + random_effect_u_x
 
           # Stage 1: Random effect generation
+          # TO DO: POSSIBILE implementation of random effect at group level (random error nested at gorup level)
 
           # calculate a random effect for each variable/level
           reff_u <- paste0("raneff_u", var, "_lvl", lvl)
 
-          data[rows_pop, paste0(reff_u)] <- rep(rnorm(length(unique(data[rows_pop, 'id'])),
-                                                      mean = 0, sd = sigma.u_k),
-                                                each = num_trials[p])
-
-          # # dataframe with random effect for each individual
-          dfrandom <- data.frame(id=unique(data[, 'id']), reff=rep(rnorm(length(unique(data[, 'id'])),
+          # dataframe with random effect for each individual
+          dfrandom <- data.frame(id=unique(data[rows_pop, 'id']), reff=rep(rnorm(length(unique(data[rows_pop, 'id'])),
                                                                          mean = 0, sd = sigma.u_k)
           ))
 
