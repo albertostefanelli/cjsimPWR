@@ -36,26 +36,26 @@
 
 #DEBUG MULTI-GROUPS
 
-# design_example <- generate_design(n_profiles = 2,
-#  n_attributes = 3,
-#  n_levels = c(2, 3, 5))
-#
-# # Design with multiple groups/sub-populations:
-# # random sample of 500 Democratic, 200 Independent, 500 Republican respondents
-# sample_subgrp <- generate_samples(design =  list(design_example, design_example, design_example),
-#                                units = c(500, 200, 500),
-#                                n_tasks = c(3, 3, 3),
-#                                group_name = c("Democrat","Independent", "Republican" )
-#                                )
-#
-# input <- sample_subgrp
-#
-# # Simulated data using the coefficients contained in true_coef for each subgroup of respondents
-# true_coef = list("Democrat" = list(0.2, c(-0.1, 0.1), c(-0.1, -0.1, -0.1, 0.1)),
-#                              "Independent" = list(0.1, c(-0.2, -0.05),  c(-0.1, 0.1, 0.1, 0.3)),
-#                              "Republican" = list(0.1, c(-0.1, 0.05),  c(-0.1, 0.2, -0.1, 0.1)))
-# sigma.u_k = 0.05
-# LOG = TRUE
+design_example <- generate_design(n_profiles = 2,
+ n_attributes = 3,
+ n_levels = c(2, 3, 5))
+
+# Design with multiple groups/sub-populations:
+# random sample of 500 Democratic, 200 Independent, 500 Republican respondents
+sample_subgrp <- generate_samples(design =  list(design_example, design_example, design_example),
+                               units = c(500, 200, 500),
+                               n_tasks = c(3, 3, 3),
+                               group_name = c("Democrat","Independent", "Republican" )
+                               )
+
+input <- sample_subgrp
+
+# Simulated data using the coefficients contained in true_coef for each subgroup of respondents
+true_coef = list("Democrat" = list(0.2, c(-0.1, 0.1), c(-0.1, -0.1, -0.1, 0.1)),
+                             "Independent" = list(0.1, c(-0.2, -0.05),  c(-0.1, 0.1, 0.1, 0.3)),
+                             "Republican" = list(0.1, c(-0.1, 0.05),  c(-0.1, 0.2, -0.1, 0.1)))
+sigma.u_k = 0.05
+LOG = TRUE
 
 
 
@@ -110,7 +110,7 @@ simulate_conjoint <- function(input,
 
   # Sanity check: names of the sub populations match the names in true_coef
   if (is.null(data$id_grp)){}else{
-    if(!sum(unique(data$id_grp) == names(true_coef))==length(unique(data$id_grp))){stop("group_name and true_coef do not match.\n Maybe the generate_samples and simulate_conjoint population names are not the same?")}else{}
+    if(!sum(unique(data$id_grp) == names(true_coef))==length(unique(data$id_grp))){stop("group_name and true_coef do not match.\n Maybe the generate_samples and simulate_conjoint population names are not the same?")}
   }
 
 
@@ -274,6 +274,7 @@ simulate_conjoint <- function(input,
       data[rows_pop, paste0("probability_p1")] <- 0.5
       data[rows_pop, paste0("probability_p2")] <- 0.5
 
+
       # Iterate over all variables and levels
       for(var in 1:num_vars){
         for(lvl in 1:(num_lvls - 1)[var]){
@@ -290,13 +291,13 @@ simulate_conjoint <- function(input,
 
           # dataframe with random effect for each individual
           dfrandom <- data.frame(id=unique(data[rows_pop, 'id']), reff=rep(rnorm(length(unique(data[rows_pop, 'id'])),
-                                                                         mean = 0, sd = sigma.u_k)
+                                                                                 mean = 0, sd = sigma.u_k)
           ))
 
 
-          # # rename the the column to match the  ame of each variable-level random effect
+          # rename the the column to match the  ame of each variable-level random effect
           names(dfrandom)[grep("reff", names(dfrandom))] <- paste0(reff_u)
-          # # bind by id such that for each variable-level the individual random effect is the same within the variable
+          # bind by id such that for each variable-level the individual random effect is the same within the variable
           data <- left_join(data, dfrandom, by="id")
 
           # Stage 2: Effect calculation
@@ -304,9 +305,13 @@ simulate_conjoint <- function(input,
           coef_x <- paste0("cx", var, "_lvl", lvl)
           # [resp.-spec. coef]        [average effect]   +   [random effect respondent]
           data[rows_pop, paste0(coef_x)] <- true_coef[[p]][[var]][[lvl]] + data[rows_pop, paste0(reff_u)]
+          # drop random effect for variable for each pop such that we re-calulate reff_u for each population
+          data <- data[, -which(names(data) ==  paste0(reff_u))]
+
 
           #### Calculate the predicted probability of selecting a profile
           # Linear probability predictor
+
           data[rows_pop,paste0("probability_p1")] <- data[rows_pop, paste0("probability_p1")] +
             data[rows_pop, paste0(coef_x)] * ifelse(data[rows_pop, paste0("Profile_1_var_", var)] == lvl, 1, 0)
 
@@ -323,6 +328,7 @@ simulate_conjoint <- function(input,
       }
     }
   }
+
 
   data$probability_p1 <- pmin(data$probability_p1, 0.999)
   data$probability_p1 <- pmax(data$probability_p1, 0.001)
