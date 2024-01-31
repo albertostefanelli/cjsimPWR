@@ -1,7 +1,8 @@
 Power Analyses for Conjoint Experiments Using Simulation Techniques
 ================
 
-<img src="img/cjSimPWR_hex.png" width="30%" style="display: block; margin: auto;" />
+| <img width="30%" src="img/cjSimPWR_hex.png"> |
+|:--------------------------------------------:|
 
 Using the simulation framework developed in [Stefanelli, A., & Lukac, M.
 (2020)](https://osf.io/preprints/socarxiv/spkcy/), this R package
