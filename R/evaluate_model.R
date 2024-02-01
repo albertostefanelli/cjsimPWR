@@ -68,6 +68,7 @@ evaluate_model <- function(input,
     mod <- glm(model_formula, data = input$data,
                family=gaussian(link="identity"))
 
+    # TO DO: remove the pipes to make the package compatible with older R versions
     # estimated effect w non-robust std.error
     mm_noclust <- marginaleffects::avg_slopes(mod, variables = paste0("var_", 1:num_attrbs),  p_adjust=NULL) |>
       data.frame() |>
@@ -139,8 +140,7 @@ evaluate_model <- function(input,
       rename(`std.error.robust` = std.error,
              `conf.low.robust` = conf.low,
              `conf.high.robust` = conf.high
-      ) #|>
-     # mutate_at(vars(conf.low.robust, conf.high.robust), ~ round(.x, 3))
+      )
 
     # join the marginal effect w non-robust std.error w cluster-robust std.error
     mm <- left_join(mm_noclust, mm_robust, by=c("id_grp","term","n_coef" ))
@@ -173,27 +173,25 @@ evaluate_model <- function(input,
 
   }
 
-  # Check whether the estimate is in CI95: results to T or F
+  # TO DO: implement a way to use alpha to check whether the estimate is within CI
+  # if we get smaller CI ("HIGHER ALPHA") we DECREASE the chances that the estimate is inside the CI
+  # ---->  lower probability of finding an effect that is there
+  # ---->  lower power AND higher type II error.
+  # ---->  lower chances of saying that there is a difference (effect) when there is not.
+  # ---->  reducing Type I error.
 
-  # if the estimate is within the CI we say that there is an effect in the population SO that there is difference (effect) when there is a difference (effect)
-  # if we get smaller CI (in our case increasing alpha from 0.001 to 0.1 [HIGHER ALPHA]) we DECREASE the chances that the estimate is inside the CI SO that there is difference (effect) when there is a difference (effect)
-  # SO this means that we decrease the probability of finding an effect that is there that MEANS LOWER POWER that means higher type II erorr.
-  # SO this means that we reduce the chances of saying that there is a difference (effect) when there is not. this means reducing Type I error.
-  # HOWEVER WE NEED THE OPPSITITE
-
-  #increasing α (e.g., from .01 to .05 or .10) increases the chances of making a Type I Error (i.e., saying there is a difference when there is not)
-  #decreases the chances of making a Type II Error (i.e., saying there is no difference when there is) [SO HIGHER POWER]
-  #and decreases the rigor of the test.
+  # HOWEVER: in traditional power analysis increasing alpha does the oppsite:
+  # ----> increases the chances of making a Type I Error (i.e., saying there is a difference when there is not)
+  # ----> decreases the chances of making a Type II Error (i.e., saying there is no difference when there is) [SO HIGHER POWER AND LOWER RIGOR OF THE TEST]
 
   # setting alpha for calculating power and significant level
+  # TO DO: implement varying alpha for allowing trade-off between type 1 and type 2 errors
   alpha <- 0.05
   z_score <- qnorm(1 - alpha/2)
+
   # Is significant?
-
   mm$sig <- ifelse(abs(mm$estimate /  mm$std.error) > z_score, T, F)
-
   mm$sig_robust <- ifelse(abs(mm$estimate /  mm$std.error.robust) > z_score, T, F)
-
 
   # Confidence intervals
   mm$ci_lower <- mm$estimate - z_score * mm$std.error
@@ -202,8 +200,7 @@ evaluate_model <- function(input,
   mm$ci_robust_lower <- mm$estimate - z_score * mm$std.error.robust
   mm$ci_robust_upper <- mm$estimate + z_score * mm$std.error.robust
 
-
-  # IF sig, is within the CI?
+  # IF sig, is within the CI? [not used atm]
   mm$in_ci <- ifelse(mm$sig, ifelse(mm$true_coef <  mm$ci_upper &
                                         mm$true_coef >  mm$ci_lower,
                                       T, F), F)
@@ -293,7 +290,8 @@ evaluate_model <- function(input,
           in_ci,
           sig,
           typeS,
-          typeM)}}
+          typeM)}
+      }
 
   results <- result |> mutate_if(is.numeric, ~format(round(.x,digits=2), nsmall=2))
 
