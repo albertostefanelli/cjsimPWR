@@ -7,7 +7,7 @@ Power Analyses for Conjoint Experiments Using Simulation Techniques
 Using the simulation framework developed in [Stefanelli, A., & Lukac, M.
 (2020)](https://osf.io/preprints/socarxiv/spkcy/), this R package
 provides an extensive set of functions to simulate conjoint data,
-calculate power (1−$\beta$), Type S, and Type M error rates for
+calculate power (1−Beta), Type S, and Type M error rates for
 forced-choice conjoint experiments based on the design proposed by
 [Hainmueller, J., Hopkins, D., & Yamamoto, T.
 (2014)](https://www.cambridge.org/core/journals/political-analysis/article/causal-inference-in-conjoint-analysis-understanding-multidimensional-choices-via-stated-preference-experiments/414DA03BAA2ACE060FFE005F53EFF8C8).
