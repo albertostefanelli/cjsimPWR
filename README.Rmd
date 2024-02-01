@@ -7,11 +7,14 @@ output: github_document
 | :--: |
 
 
-
-
 Using the simulation framework developed in [Stefanelli, A., & Lukac, M. (2020)](https://osf.io/preprints/socarxiv/spkcy/), this R package provides an extensive set of functions to simulate conjoint data, calculate power (1−Beta), Type S, and Type M error rates for forced-choice conjoint experiments based on the design proposed by [Hainmueller, J., Hopkins, D., & Yamamoto, T. (2014)](https://www.cambridge.org/core/journals/political-analysis/article/causal-inference-in-conjoint-analysis-understanding-multidimensional-choices-via-stated-preference-experiments/414DA03BAA2ACE060FFE005F53EFF8C8). 
 
 A shiny app that can be used without any R or programming knowledge is available for simpler designs [https://mblukac.shinyapps.io/conjoints-power-shiny/](https://mblukac.shinyapps.io/conjoints-power-shiny/). 
+
+| **WARNING**|
+|:--:|
+This is an early development version of the package. If you find any bug, inconsistency, or error please open a ticket directly on Github or drop a line at alberto.stefanelli(at)kulueven.be. General suggestions on how to improve the package are also welcomed!|
+
 
 ## Installation
 

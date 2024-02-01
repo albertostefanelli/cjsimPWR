@@ -16,6 +16,10 @@ A shiny app that can be used without any R or programming knowledge is
 available for simpler designs
 <https://mblukac.shinyapps.io/conjoints-power-shiny/>.
 
+|                                                                                                                             **WARNING**                                                                                                                             |
+|:-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|
+| This is an early development version of the package. If you find any bug, inconsistency, or error please open a ticket directly on Github or drop a line at alberto.stefanelli(at)kulueven.be. General suggestions on how to improve the package are also welcomed! |
+
 ## Installation
 
 You can install the development version of cjsimPWR using the following
@@ -30,11 +34,11 @@ devtools::install_github("albertostefanelli/cjsimPWR")
 ## Usage
 
 The current version of the `power_sim()` function can be utilized to
-calculate **a priori** power (1−$\beta$), Type S, and Type M error rates
-based on conjoint designs typically used in political science and
-neighboring disciplines. It can be used when the treatment effect (i.e.,
-AMCE) is either (1) considered to be homogeneous across all respondents
-or (2) expected to differ substantially across different segments of the
+calculate **a priori** power, Type S, and Type M error rates based on
+conjoint designs typically used in political science and neighboring
+disciplines. It can be used when the treatment effect (i.e., AMCE) is
+either (1) considered to be homogeneous across all respondents or (2)
+expected to differ substantially across different segments of the
 population. In the latter case, the effect of an experimental attribute
 may vary depending on some respondent’s characteristics, such as party
 identity [(e.g., Kirkland, P. A., & Coppock, A.,
@@ -64,8 +68,8 @@ point, see [Abadie et al.,
 ## Examples
 
 ``` r
-# This calculates power for an experiment with the following attributes with no 
-# heterogeneity across subgroups (i.e., homogeneous treatment effect)
+# This calculates power for an experiment with the following attributes 
+# with no subgroups (i.e., homogeneous treatment effect)
 
 # Number of attributes (n_attributes): 3
 # Number of levels Attribute 1 (n_levels): 2
@@ -101,7 +105,7 @@ df_power |> print(n=40)
 
 # This calculates power for an experiment with 3 subgroups of respondents 
 # (Democrat, Independent, Republican) with hypothesized differences 
-# in conditional AMCEs (i.e., treatment heterogeneity). 
+# in conditional AMCEs (i.e., heterogeneous treatment effect). 
 
 df_power_interaction <- power_sim(
           n_attributes = 3,
