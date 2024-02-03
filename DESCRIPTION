@@ -1,7 +1,7 @@
 Package: cjsimPWR
 Type: Package
 Title: Power Analyses for Conjoint Experiments Using Simulation Techniques
-Version: 0.1.1
+Version: 0.2.1
 Author: c(person("Alberto", "Stefanelli", email = "alberto.stefanelli@kuleuven.be",
                   role = c("aut", "cre")),
            person("Martin", "Lukac", email = "m.b.lukac@gmail.com",
