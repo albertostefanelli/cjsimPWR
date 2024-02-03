@@ -37,9 +37,9 @@ power_sim(
 
 \item{seed}{int; the initial seed used in the simulation. The RNG reproducibility is achieved by pre-generating the random seeds for all iterations of the simulation such that the seeds always returns the exact same sequence of random numbers given the specified seed. See future_lapply for more information.}
 
-\item{n_sim}{internal parameter, numeric; number of the simulation.}
+\item{n_sim}{internal parameter, numeric; number of the simulation from sim_cj to power_sim().}
 
-\item{p}{internal parameter, numeric; passes the progress progression indicator to power_sim().}
+\item{p}{internal parameter, numeric; passes the progress indicator from sim_cj() to power_sim().}
 }
 \value{
 The function returns a dataframe containing the results of the evaluation procedure and the design specification

@@ -36,7 +36,7 @@ sim_cj(
 
 \item{prog}{internal parameter, logical; whether the progress indicator should be activated to feed power_sim(). Default set to FALSE.}
 
-\item{p}{internal parameter, numeric; passes the progress progression indicator to power_sim().}
+\item{p}{internal parameter, numeric; passes the progress indicator to power_sim().}
 }
 \value{
 The function return a dataframe containing the following parameters:
