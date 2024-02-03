@@ -50,9 +50,11 @@ through subgroup analysis (see [Leeper, T., Hobolt, S., & Tilley, J.,
 `power_sim()` calculates power measures using cluster-robust standard
 errors at the respondent level as suggested by [Hainmueller, J.,
 Hopkins, D., & Yamamoto, T.
-(2014)](https://www.cambridge.org/core/journals/political-analysis/article/causal-inference-in-conjoint-analysis-understanding-multidimensional-choices-via-stated-preference-experiments/414DA03BAA2ACE060FFE005F53EFF8C8),
-making it more versatile and accurate compared to non-parametric
-techniques (e.g., [Schuessler J. & Freitag M.,
+(2014)](https://www.cambridge.org/core/journals/political-analysis/article/causal-inference-in-conjoint-analysis-understanding-multidimensional-choices-via-stated-preference-experiments/414DA03BAA2ACE060FFE005F53EFF8C8).
+This makes this simulation-based technique more versatile and accurate
+compared to non-parametric approaches where nesting and treatment
+heterogeneity at respondent level are usually disregarded (e.g.,
+[Schuessler J. & Freitag M.,
 2020](https://github.com/m-freitag/cjpowR)). The amount of treatment
 heterogeneity can be set using the `sigma.u_k` argument in the
 `power_sim()`. A value between 0.05 and 0.15 is deemed appropriate in
@@ -69,12 +71,12 @@ point, see [Abadie et al.,
 
 ``` r
 # This calculates power for an experiment with the following attributes 
-# with no subgroups (i.e., homogeneous treatment effect)
+# with no subgroups (i.e., homogeneous treatment effects)
 
 # Number of attributes (n_attributes): 3
 # Number of levels Attribute 1 (n_levels): 2
 # Number of levels Attribute 2 (n_levels): 3
-# Number of levels Attribute 1 (n_levels): 5
+# Number of levels Attribute 3 (n_levels): 5
 # Number of respondents (units): 500
 # Number of tasks per respondent (n_tasks): 5
 # Hypothesized AMCE compared to reference level (true_coef): 
@@ -105,7 +107,7 @@ df_power |> print(n=40)
 
 # This calculates power for an experiment with 3 subgroups of respondents 
 # (Democrat, Independent, Republican) with hypothesized differences 
-# in conditional AMCEs (i.e., heterogeneous treatment effect). 
+# in conditional AMCEs (i.e., heterogeneous treatment effects). 
 
 df_power_interaction <- power_sim(
           n_attributes = 3,
