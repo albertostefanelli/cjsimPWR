@@ -68,34 +68,37 @@ The function constructs a full factorial experimental design based on the design
 
 # Simulated power, Type M, and Type S error
 # for a conjoint design with no observed sub-groups of respondents.
-df_power <- power_sim(
+df_wo_subgroups <- power_sim(
           n_attributes = 3,
           n_levels = c(2, 3, 5),
           n_tasks = 4,
           units = c(500),
-          true_coef = list(0.2, c(-0.1, 0.1), c(-0.1, -0.1, -0.1, 0.1)),
+          true_coef = list(0.2, c(-0.1, 0.1), c(-0.1, -0.1, -0.01, 0.1)),
           sigma.u_k = 0.05,
           seed = 92,
           sim_runs = 30)
 
+print(df_wo_subgroups)
 ## Close the PSOCK cluster created with future
 if (!inherits(future::plan(), "sequential")){future::plan("sequential")}
 
 # Simulated power, Type M, and Type S error
 # for a conjoint design with 3 observed sub-groups of respondents.
-df_cj <- power_sim(
+df_w_subgroups <- power_sim(
           n_attributes = 3,
           n_levels = c(2, 3, 5),
           n_tasks = 3,
           group_name = c("Democrat", "Independent", "Republican"),
           units = c(500, 200, 500),
-         true_coef = list("Democrat" = list(0.2, c(-0.1, 0.1), c(-0.1, -0.1, -0.1, 0.1)),
+         true_coef = list("Democrat" = list(0.2, c(-0.1, 0.1), c(-0.1, -0.1, -0.1, 0.01)),
                           "Independent" = list(0.1, c(-0.2, -0.05),  c(-0.1, 0.1, 0.1, 0.3)),
-                          "Republican" = list(0.1, c(-0.1, 0.05),  c(-0.1, 0.2, -0.1, 0.1))
+                          "Republican" = list(0.1, c(-0.1, 0.01),  c(-0.1, 0.2, -0.1, 0.1))
                              ),
          sigma.u_k = 0.05,
          seed = 78,
          sim_runs = 30)
+
+print(df_w_subgroups, n=40)
 ## Close the PSOCK cluster created with future
  if (!inherits(future::plan(), "sequential")){future::plan("sequential")}
 
