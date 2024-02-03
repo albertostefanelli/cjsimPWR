@@ -45,7 +45,7 @@
 #'           true_coef = list(0.2, c(-0.1, 0.1), c(-0.1, -0.1, -0.01, 0.1)),
 #'           sigma.u_k = 0.05,
 #'           seed = 92,
-#'           sim_runs = 30)
+#'           sim_runs = 200)
 #'
 #' print(df_wo_subgroups)
 #' ## Close the PSOCK cluster created with future
@@ -59,13 +59,13 @@
 #'           n_tasks = 3,
 #'           group_name = c("Democrat", "Independent", "Republican"),
 #'           units = c(500, 200, 500),
-#'          true_coef = list("Democrat" = list(0.2, c(-0.1, 0.1), c(-0.1, -0.1, -0.1, 0.01)),
+#'          true_coef = list("Democrat" = list(0.2, c(-0.1, 0.1), c(-0.1, -0.1, -0.1, 0.02)),
 #'                           "Independent" = list(0.1, c(-0.2, -0.05),  c(-0.1, 0.1, 0.1, 0.3)),
 #'                           "Republican" = list(0.1, c(-0.1, 0.01),  c(-0.1, 0.2, -0.1, 0.1))
 #'                              ),
 #'          sigma.u_k = 0.05,
 #'          seed = 78,
-#'          sim_runs = 30)
+#'          sim_runs = 200)
 #'
 #' print(df_w_subgroups, n=40)
 #' ## Close the PSOCK cluster created with future
