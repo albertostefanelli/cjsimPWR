@@ -74,7 +74,7 @@
 power_sim <- function(
     n_attributes,
     n_levels,
-    group_name,
+    group_name = NULL,
     units,
     n_tasks,
     true_coef,
