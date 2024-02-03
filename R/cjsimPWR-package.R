@@ -8,4 +8,3 @@
 #' @importFrom marginaleffects avg_slopes
 #' @importFrom stats as.formula gaussian glm power qnorm rbinom rnorm
 #' @importFrom purrr reduce
-NULL
