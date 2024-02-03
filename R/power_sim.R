@@ -10,8 +10,8 @@
 #' @param sigma.u_k int; standard deviation of the treatment effect for each variable/level for each respondent.
 #' @param sim_runs int; number of simulations to perform. Larger numbers correspond to more precise estimates.
 #' @param seed  int; the initial seed used in the simulation. The RNG reproducibility is achieved by pre-generating the random seeds for all iterations of the simulation such that the seeds always returns the exact same sequence of random numbers given the specified seed. See future_lapply for more information.
-#' @param n_sim internal parameter, numeric; number of the simulation.
-#' @param p internal parameter, numeric; passes the progress progression indicator to power_sim().
+#' @param n_sim internal parameter, numeric; number of the simulation from sim_cj to power_sim().
+#' @param p internal parameter, numeric; passes the progress indicator from sim_cj() to power_sim().
 #'
 #' @return The function returns a dataframe containing the results of the evaluation procedure and the design specification
 #' \itemize{

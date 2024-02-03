@@ -10,7 +10,7 @@
 #' @param sigma.u_k int; standard deviation of the treatment effect for each variable/level for each respondent.
 #' @param n_sim internal parameter, integer; number of simulations specified by power_sim().
 #' @param prog internal parameter, logical; whether the progress indicator should be activated to feed power_sim(). Default set to FALSE.
-#' @param p internal parameter, numeric; passes the progress progression indicator to power_sim().
+#' @param p internal parameter, numeric; passes the progress indicator to power_sim().
 #'
 #' @return The function return a dataframe containing the following parameters:
 #' \itemize{
