@@ -5,8 +5,8 @@
 #' @param n_levels  int; vector of integers of length n_attributes; number of levels of variables should be > 1.
 #' @param n_profiles int; number of profiles to be compared together. Always set to 2 as in Hainmueller, J., Hopkins, D., & Yamamoto, T. (2014) framework.
 #' @param rem.eq.prof logical; remove comparisons of same profiles from the full factorial. This is relevant specifically for small design with small n_attributes and n_levels.
-#'
-#' @return dataframe; dataframe with a full factorial design, which combines all possible levels of the conjoint attributes attributes. The resulting dataframe can be passed to generate_samples()
+#
+#' @return The function returns a with a full factorial design, which combines all possible levels of the conjoint attributes attributes. The resulting dataframe can be passed to generate_samples()
 #' @export
 #'
 #' @examples

@@ -10,7 +10,11 @@ sim_to_long(input)
 \item{input}{list; A list containg a dataframe and inputs from simulate_conjoint() function.}
 }
 \value{
-list; List composed of (a) a dataframe in a long format and  (b) the conjoint design specifications (inputs)
+The function returns a list containing:
+\itemize{
+\item{dataframe:} {tranformed from a wide to a long format}
+\item{design specifications:} {the conjoint design specifications (inputs)}
+}
 }
 \description{
 Transform the wide conjoint dataframe contained in simulate_conjoint() in a long one for analysis.

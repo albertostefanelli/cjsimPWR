@@ -18,7 +18,11 @@ generate_samples(design, units, n_tasks, LOG = FALSE, group_name = NULL)
 \item{group_name}{character; optional vector of names for the observed populations/subgroups of respondents.}
 }
 \value{
-A list containing (a) dataframe with samples for a single or multiple [sub]populations (n = [n_population *] units * n_tasks) of respondents and (b) the design specifications listed in generate_design() and generate_samples().
+The function returns a list containing:
+\itemize{
+\item{dataframe:} {samples from a single or multiple [sub]population[s] (n = [n_population *] units * n_tasks) of respondents.}
+\item{design specifications:} {listed in generate_design() and generate_samples().}
+}
 }
 \description{
 Sample of profiles from the full factorial design. If multiple (sub)populations are present, generate_samples() generates a sample for each population.

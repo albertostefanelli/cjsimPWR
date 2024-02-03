@@ -11,12 +11,16 @@ simulate_conjoint(input, true_coef, sigma.u_k = 0.02, LOG = FALSE)
 
 \item{true_coef}{vector or list of vectors; hypothesized (true) coefficients for all parameters to be estimated. The coefficients must be in order, e.g., var_1_lvl_1, var_1_lvl2, var_2_lvl1, var_2_lvl2.}
 
-\item{sigma.u_k}{int; standard deviation of the treatment effect for each variable/level for each respondent.}
+\item{sigma.u_k}{standard deviation of the treatment effect for each variable/level for each respondent.}
 
 \item{LOG}{logical; returns parsing of coefficients and sanity checks.}
 }
 \value{
-list; list of similar to the one obtained from generate_samples() with the addition of a) column "y" to data, meaning selection of that respective profile and b) input obtained from generate_design(), generate_samples(), and simulate_conjoint() in a wide conjoint format
+The function returns a list similar to the one obtained from generate_samples() with the addition of:
+\itemize{
+\item{column "y":} {a vector of 0s and 1s corresponding to the simulated selection of that respective profile.}
+\item{a list of inputs:} {inputs obtained from generate_design(), generate_samples(), and simulate_conjoint() in a wide conjoint format}
+}
 }
 \description{
 Simulate conjoint process of profile selection using the object obtained from generate_samples().

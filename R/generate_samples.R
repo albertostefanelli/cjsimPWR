@@ -6,7 +6,11 @@
 #' @param LOG logical; return debugging information on sample generation.
 #' @param group_name character; optional vector of names for the observed populations/subgroups of respondents.
 #'
-#' @return A list containing (a) dataframe with samples for a single or multiple [sub]populations (n = [n_population *] units * n_tasks) of respondents and (b) the design specifications listed in generate_design() and generate_samples().
+#' @return The function returns a list containing:
+#'\itemize{
+#' \item{dataframe:} {samples from a single or multiple [sub]population[s] (n = [n_population *] units * n_tasks) of respondents.}
+#' \item{design specifications:} {listed in generate_design() and generate_samples().}
+#' }
 #' @export
 #'
 #' @examples

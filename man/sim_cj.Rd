@@ -39,22 +39,24 @@ sim_cj(
 \item{p}{internal parameter, numeric; passes the progress progression indicator to power_sim().}
 }
 \value{
-dataframe; a dataframe containing the results of the evaluation procedure and the design specification
-- num_respondents: int; total number or respondents.
-- num_attrbs: int; total number of attributes included in the conjoint experiment.
-- num_tasks: int; total number of task taken by each respondent.
-- id_grp: character; name of the sub-population of interest.
-- attrb: int; name of the attribute included in the conjoint design. At the moment these cannot be changed and are in the format var_1 ... var_x.
-- level: int; levels of each attribute.
-- true_coef: numeric; coefficient from true_coefs.
-- estimate: numeric; estimated coefficient from the linear probability model .
-- std.error[.robust]: numeric; estimated (robust) standard error.
-- ci[_robust]_lower: numeric; lower bound of the confidence interval calculated (level= 0.95).
-- ci[_robust]_upper: numeric;upper bound of the confidence interval calculated (level= 0.95).
-- in_ci[_robust]: logical, if the true_coef is contained in the confidence level.
-- sig[_robust]: logical, if the estimate coefficent (estimate) is significant (alpha = 0.05).
-- typeS[_robust]: logical; if significant, did the sign of estimated coefficient (estimate) match to true coefficient? (see, Gelman and Carlin, 2014).
-- typeM[_robust]: numeric; if significant, ratio of estimated/true coefficient (see, Gelman and Carlin, 2014).
+The function return a dataframe containing the following parameters:
+\itemize{
+\item{num_respondents:} {int; total number or respondents.}
+\item{num_attrbs:} {int; total number of attributes included in the conjoint experiment.}
+\item{num_tasks:} {int; total number of task taken by each respondent.}
+\item{id_grp:} {character; name of the sub-population of interest.}
+\item{attrb:} {int; name of the attribute included in the conjoint design. At the moment these cannot be changed and are in the format var_1 ... var_x.}
+\item{level:} {int; levels of each attribute.}
+\item{true_coef:} {numeric; coefficient from true_coefs.}
+\item{estimate:} {numeric; estimated coefficient from the linear probability model.}
+\item{std.error[.robust]:} {numeric; estimated (robust) standard error.}
+\item{ci[_robust]_lower:} {numeric; lower bound of the confidence interval calculated (level= 0.95).}
+\item{ci[_robust]_upper:} {numeric;upper bound of the confidence interval calculated (level= 0.95).}
+\item{in_ci[_robust]:} {logical, if the true_coef is contained in the confidence level.}
+\item{sig[_robust]:} {logical, if the estimate coefficent (estimate) is significant (alpha = 0.05).}
+\item{typeS[_robust]:} {logical, did the sign of sig. coef match to true? (see, Gelman and Carlin, 2014).}
+\item{typeM[_robust]:} {numeric; ratio of estimated/true coefficent, if significant (see Gelman and Carlin, 2014).}
+}
 }
 \description{
 The function constructs a full factorial experimental design based on the design specification, generates samples of conjoint profiles drawing from the full factorial design, and evaluate the simulated conjoint process of profile selection against the hypothesized true coefficients.

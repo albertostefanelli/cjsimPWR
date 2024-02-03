@@ -16,7 +16,7 @@ generate_design(n_attributes, n_levels, n_profiles = 2, rem.eq.prof = TRUE)
 \item{rem.eq.prof}{logical; remove comparisons of same profiles from the full factorial. This is relevant specifically for small design with small n_attributes and n_levels.}
 }
 \value{
-dataframe; dataframe with a full factorial design, which combines all possible levels of the conjoint attributes attributes. The resulting dataframe can be passed to generate_samples()
+The function returns a with a full factorial design, which combines all possible levels of the conjoint attributes attributes. The resulting dataframe can be passed to generate_samples()
 }
 \description{
 Generate full factorial experimental design based on the number of attributes (n_attributes) and number of levels (n_levels) included in the design.
