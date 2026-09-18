@@ -1,4 +1,10 @@
 ^.*\.Rproj$
 ^\.Rproj\.user$
 ^README\.Rmd$
+^README\.html$
+^private$
+^docs$
+^\.github$
 ^LICENSE\.md$
+\.DS_Store$
+^cran-comments\.md$

@@ -2,106 +2,183 @@
 % Please edit documentation in R/power_sim.R
 \name{power_sim}
 \alias{power_sim}
-\title{Generate and evaluate a conjoint experiment based on the design specification.}
+\title{Simulate power and estimation performance for a conjoint design}
 \usage{
 power_sim(
-  n_attributes,
-  n_levels,
-  group_name = NULL,
+  levels = NULL,
+  true_amce = NULL,
   units,
   n_tasks,
-  true_coef,
-  sigma.u_k,
-  sim_runs = 100,
+  groups = NULL,
+  sigma = 0,
+  dgp = c("logit", "linear", "odds"),
+  alpha = 0.05,
+  vcov = c("CR1", "CR2"),
+  sim_runs = 1000,
   seed,
-  n_sim,
-  p
+  cores = 1,
+  inference = NULL,
+  latent_sigma = NULL,
+  calibration_control = list(),
+  keep_runs = FALSE,
+  n_levels = NULL,
+  group_name = NULL,
+  true_coef = NULL,
+  sigma.u_k = NULL,
+  n_attributes = NULL
 )
 }
 \arguments{
-\item{n_attributes}{int; number of independent variables (i.e. treatments) in the conjoint experiment.}
+\item{levels}{either a vector with the number of levels of each attribute, or a list with the level
+labels of each attribute. Names give the attribute names; unnamed attributes are called \code{var_1},
+\code{var_2}, and so on. Level counts give the labels \code{"0"}, \code{"1"}, and so on. The first level of each
+attribute is its reference level. Attributes keep the order given, and there is no limit on their
+number.}
 
-\item{n_levels}{int; vector of integers of length n_attributes; number of levels of variables should be > 1.}
+\item{true_amce}{AMCEs of the non-reference levels: a list with one numeric vector per attribute, matched
+to the attributes by name when named and by position otherwise. With groups, either one such list for
+all groups or a list of them named by group. Named coefficient vectors are matched to the design's
+non-reference level labels; unnamed vectors follow the design's level order.}
 
-\item{group_name}{character; optional vector of names for the observed populations/subgroups of respondents.}
+\item{units}{number of respondents: one number, or one per group (matched by name when named).}
 
-\item{units}{int; single or a list indicating the number of respondents.}
+\item{n_tasks}{number of tasks per respondent: one number, or one per group.}
 
-\item{n_tasks}{int;  single or a list indicating number of tasks performed by each respondent.}
+\item{groups}{NULL, or group names in the desired order. Report each group's AMCEs and differences
+between each subsequent group and the first group. Named sample sizes and effects are matched
+by name, retaining this order. A single group has AMCEs without differences.}
 
-\item{true_coef}{vector or list of vectors; hypothesized (true) coefficients for all parameters to be estimated. The coefficients must be in order, e.g., var_1_lvl_1, var_1_lvl2, var_2_lvl1, var_2_lvl2.}
+\item{sigma}{heterogeneity of preferences: the standard deviation, across respondents, of each
+respondent's own AMCE, on the probability scale (\code{sigma = 0.05} means individual AMCEs spread
+with SD 0.05 around the requested AMCE). Available for the logit model; the linear model requires
+\code{sigma = 0}. A requested zero AMCE stays zero in the population; individual respondents can still
+have positive or negative effects under heterogeneity.
+There is no generally valid value: use pilot evidence where available, otherwise compare labelled
+scenarios such as \code{sigma = c(0, 0.05, 0.10, 0.15)} with the requested AMCEs held fixed.}
 
-\item{sigma.u_k}{int; standard deviation of the treatment effect for each variable/level for each respondent.}
+\item{dgp}{choice model: \code{"logit"} (default), calibrated so that generated AMCEs match \code{true_amce}
+within the calibration tolerance;
+\code{"linear"}, where the AMCEs equal \code{true_amce} exactly but no heterogeneity is possible; or
+\code{"odds"}, the deprecated model of versions up to 0.2.1, whose inputs are score coefficients rather
+than AMCEs.}
 
-\item{sim_runs}{int; number of simulations to perform. Larger numbers correspond to more precise estimates.}
+\item{alpha}{Significance level for two-sided confidence intervals and tests of zero.}
 
-\item{seed}{int; the initial seed used in the simulation. The RNG reproducibility is achieved by pre-generating the random seeds for all iterations of the simulation such that the seeds always returns the exact same sequence of random numbers given the specified seed. See future_lapply for more information.}
+\item{vcov}{\code{"CR1"} (default) or \code{"CR2"}. CR1 is computed with
+\code{sandwich::vcovCL(type = "HC1", cadjust = TRUE)}: the cluster-robust covariance times
+G/(G-1) * (n-1)/(n-k), where G is all respondents in the joint fit, n is profile rows and k is the
+fitted rank (\code{clubSandwich}'s \code{"CR1S"}, and the estimator of \code{cjoint::amce()} and Stata's
+\code{vce(cluster)}). CR2 is the bias-reduced estimator of Bell and McCaffrey (2002) and requires the
+\code{clubSandwich} package.}
 
-\item{n_sim}{internal parameter, numeric; number of the simulation from sim_cj to power_sim().}
+\item{sim_runs}{Positive number of experiments. Defaults to 1000.}
 
-\item{p}{internal parameter, numeric; passes the progress indicator from sim_cj() to power_sim().}
+\item{seed}{Integer seed for the experiment streams. Required for reproducible runs.}
+
+\item{cores}{Positive number of workers, default 1. Values above 1 use base R PSOCK workers;
+at most \code{sim_runs} workers are started. No global future plan or options are changed.}
+
+\item{inference}{\code{"normal"}, \code{"t"} (G-1 df from the joint fit), or \code{"Satterthwaite"} (CR2 only).
+NULL chooses normal for CR1 and Satterthwaite for CR2. The G-1 approximation can be poor for
+small subgroups, even if the joint fit has many respondents.}
+
+\item{latent_sigma}{alternative to \code{sigma}: the SD of respondent-level deviations on the model's
+coefficient scale. With \code{"odds"} it reproduces the old \code{sigma.u_k}. The implied AMCE SDs are
+reported in the model's \code{truth} table.}
+
+\item{calibration_control}{optional named list of calibration settings; see the "Calibration" section.
+\code{reference_margin = 0.5} enables experimental precision planning; its default of zero
+retains the original calibration and reference budgets.}
+
+\item{keep_runs}{Retain the estimates, inference and failure reasons from every run? Default FALSE.}
+
+\item{n_levels, group_name, true_coef}{Deprecated named aliases for \code{levels}, \code{groups}, and
+\code{true_amce}. The default DGP is now calibrated logit; select \code{dgp = "odds"} explicitly to
+interpret \code{true_coef} as legacy score coefficients.}
+
+\item{sigma.u_k}{Deprecated alias. In versions up to 0.2.1 it was the SD of respondent-level
+effects on the probability scale, so with the calibrated models it is used as \code{sigma}. With
+\code{dgp = "odds"} it is used as \code{latent_sigma}, which reproduces the old behaviour exactly.}
+
+\item{n_attributes}{Deprecated attribute count, checked against \code{levels} when supplied.}
 }
 \value{
-The function returns a dataframe containing the results of the evaluation procedure and the design specification
+A \code{cj_power} list with:
 \itemize{
-\item{num_respondents:} {int; total number or respondents.}
-\item{num_attrbs:} {int; total number of attributes included in the conjoint experiment.}
-\item{num_tasks:} {int; total number of task taken by each respondent.}
-\item{id_grp:} {character; name of the sub-population of interest.}
-\item{attrb:} {int; name of the attribute included in the conjoint design. At the moment these cannot be changed and are in the format var_1 ... var_x.}
-\item{level:} {int; levels of each attribute.}
-\item{true_coef:} {numeric; coefficient from true_coefs.}
-\item{estimate:} {numeric; estimated coefficient from the linear probability model.}
-\item{std.error[.robust]:} {numeric; estimated (robust) standard error.}
-\item{ci[_robust]_lower:} {numeric; lower bound of the confidence interval calculated (level= 0.95).}
-\item{ci[_robust]_upper:} {numeric;upper bound of the confidence interval calculated (level= 0.95).}
-\item{in_ci[_robust]:} {logical, if the true_coef is contained in the confidence level.}
-\item{sig[_robust]:} {logical, if the estimate coefficent (estimate) is significant (alpha = 0.05).}
-\item{typeS[_robust]:} {logical, did the sign of sig. coef match to true? (see, Gelman and Carlin, 2014).}
-\item{typeM[_robust]:} {numeric; ratio of estimated/true coefficent, if significant (see Gelman and Carlin, 2014).}
+\item \code{performance}: one row per effect, including effect identifiers, requested and true AMCEs,
+covariance/inference methods, and all \code{\link[=summarise_runs]{summarise_runs()}} measures and counts.
+\item \code{truth}: effect identifiers and the model's input, requested AMCE, true AMCE, implied AMCE SD
+and reference precision, \code{null_status} and \code{target_error_bound}. \code{effect_id} links all result tables.
+\item \code{parameters}, \code{diagnostics}: calibrated latent parameters and per-group calibration diagnostics.
+\item \code{settings}: resolved design, sample sizes, DGP, inference, seeds, worker count and controls.
+\item \code{failures}: counts by effect, failure reason and error message; empty when no inference fails.
+\item \code{runs}: per-run estimates with \code{run} and \code{effect_id}, or NULL when \code{keep_runs = FALSE}.
+\item \code{model}: the prepared DGP, reusable with \code{\link[=simulate_experiment]{simulate_experiment()}}.
 }
 }
 \description{
-The function constructs a full factorial experimental design based on the design specification, generates samples of conjoint profiles drawing from the full factorial design, and evaluate the simulated conjoint process of profile selection against the hypothesized true coefficients.
+Calibrates the choice model once, simulates independent experiments, and evaluates AMCEs and
+differences between groups using respondent-clustered inference.
+}
+\details{
+Each experiment has its own L'Ecuyer-CMRG stream, so results are identical across worker
+counts and the first runs remain unchanged when \code{sim_runs} increases. Calibration has its own
+seed argument in \code{calibration_control}. Equal seed values can overlap calibration and experiment
+draws; the final reference uses a fresh substream. The caller's random-number state is restored after the call.
+If the caller uses Box-Muller normals, a temporary PSOCK process initializes each private seed
+to preserve that generator's cached normal draw, including when \code{cores = 1}.
+
+Bias and coverage use \code{true_amce}, the numerical reference for the generated population AMCE,
+with its uncertainty retained. Calibrated effects match \code{requested_amce} within \code{tolerance},
+rather than necessarily equalling it. Null classification uses \code{requested_amce == 0}, or
+\code{true_amce == 0} when the requested AMCE is unavailable (the deprecated odds model uses scores).
+\code{null_status} distinguishes \code{exact}, \code{calibrated} and \code{non-null} targets. A single-group requested
+zero is exact in the calibrated models. Differences are exact for shared populations, the linear
+model or levels that are zero in both groups. Separately calibrated groups with equal nonzero
+requests generally produce a small residual contrast: their Type I error is approximate.
+\code{target_error_bound = abs(true_amce - requested_amce) + reference_half_width} is a nominal 99\%
+simultaneous reference confidence bound, not a deterministic guarantee; it is NA for odds inputs.
+Type I error is printed with its Monte Carlo standard error only for null targets, not
+for nonsignificant estimates of nonzero effects. The column is omitted when no Type I error
+estimates are available. To check an effect's false-positive rate, rerun with that effect set
+to zero and the remaining design settings unchanged.
+
+An independent final reference, with a fixed budget chosen after calibration acceptance,
+avoids selecting the reference estimate by the acceptance rule. Its MCSE is propagated into
+\code{bias_mcse}; coverage MCSE remains conditional on the reference, with sensitivity bounds supplied
+by \code{\link[=summarise_runs]{summarise_runs()}}. Increasing \code{sim_runs} does not reduce reference uncertainty.
+Optional \code{calibration_control = list(reference_margin = 0.5)} reserves calibration headroom and
+plans a capped final reference budget; see \code{\link[=simulate_experiment]{simulate_experiment()}} for rules and diagnostics.
+This experimental option reduces inconclusive checks without guaranteeing confirmation.
+For calibrated nulls, \code{null_size_sensitivity} is the excess rejection probability in an unbiased,
+known-SE normal test at the target error bound, using \code{emp_se} as the SE. A warning appears when
+this exceeds \code{0.1 * sqrt(alpha * (1 - alpha) / n_valid)}. This threshold is a diagnostic choice;
+it is not a bound on size distortion for clustered, biased or non-normal estimates. Tighten
+\code{calibration_control} if the approximation is material. Exact nulls have sensitivity zero;
+non-null targets and unavailable reference bounds or empirical SEs have NA.
+
+All measures condition on successful inference for that effect, using the effect's degrees of
+freedom in each run. Failed runs are counted, never treated as nonsignificant. Sampling or fit
+errors retain all effects with reason \code{run_error} and an error message. Invalid specifications,
+unavailable CR2 dependencies, calibration failures and worker startup errors stop the call.
+
+Backward compatibility covers named arguments; migrate old positional calls to named arguments.
+The return value is now a list with a numeric performance table rather than formatted strings.
 }
 \examples{
+# 20 runs keep the example fast; use the default 1000 (or more) for a real power analysis
+# Include a zero AMCE to report Type I error alongside power
+result <- power_sim(levels = c(2, 3), true_amce = list(0.05, c(-0.05, 0)),
+                    units = 100, n_tasks = 3, sim_runs = 20, seed = 42)
+result
+result$performance[, c("attribute", "level", "true_amce", "power", "power_mcse",
+                       "type_1_error", "type_1_error_mcse", "n_valid")]
 
-# Simulated power, Type M, and Type S error
-# for a conjoint design with no observed sub-groups of respondents.
-df_wo_subgroups <- power_sim(
-          n_attributes = 3,
-          n_levels = c(2, 3, 5),
-          n_tasks = 4,
-          units = c(500),
-          true_coef = list(0.2, c(-0.1, 0.1), c(-0.1, -0.1, -0.01, 0.1)),
-          sigma.u_k = 0.05,
-          seed = 92,
-          sim_runs = 200)
-
-print(df_wo_subgroups)
-## Close the PSOCK cluster created with future
-if (!inherits(future::plan(), "sequential")){future::plan("sequential")}
-
-# Simulated power, Type M, and Type S error
-# for a conjoint design with 3 observed sub-groups of respondents.
-df_w_subgroups <- power_sim(
-          n_attributes = 3,
-          n_levels = c(2, 3, 5),
-          n_tasks = 3,
-          group_name = c("Democrat", "Independent", "Republican"),
-          units = c(500, 200, 500),
-         true_coef = list("Democrat" = list(0.2, c(-0.1, 0.1), c(-0.1, -0.1, -0.1, 0.02)),
-                          "Independent" = list(0.1, c(-0.2, -0.05),  c(-0.1, 0.1, 0.1, 0.3)),
-                          "Republican" = list(0.1, c(-0.1, 0.01),  c(-0.1, 0.2, -0.1, 0.1))
-                             ),
-         sigma.u_k = 0.05,
-         seed = 78,
-         sim_runs = 200)
-
-print(df_w_subgroups, n=40)
-## Close the PSOCK cluster created with future
- if (!inherits(future::plan(), "sequential")){future::plan("sequential")}
-
-
-
+by_group <- power_sim(levels = c(2, 2),
+  true_amce = list(Z = list(0.05, 0), A = list(0.1, 0)), groups = c("Z", "A"),
+  units = c(Z = 100, A = 80), n_tasks = 3, sim_runs = 20, seed = 42, keep_runs = TRUE)
+subset(by_group$performance, type == "difference")
+}
+\seealso{
+\code{\link[=conjoint_design]{conjoint_design()}}, \code{\link[=simulate_experiment]{simulate_experiment()}}, \code{\link[=estimate_amce]{estimate_amce()}}, \code{\link[=summarise_runs]{summarise_runs()}}
 }

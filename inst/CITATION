@@ -1,0 +1,19 @@
+citHeader("To cite cjsimPWR in publications, please cite the package and the paper describing the simulation framework:")
+
+bibentry(
+  bibtype = "Manual",
+  title   = "cjsimPWR: Power Analyses for Conjoint Experiments Using Simulation",
+  author  = c(person("Alberto", "Stefanelli"), person("Martin", "Lukac")),
+  year    = "2026",
+  note    = sprintf("R package version %s", meta$Version),
+  url     = "https://github.com/albertostefanelli/cjsimPWR"
+)
+
+bibentry(
+  bibtype = "Unpublished",
+  title   = "Subjects, Trials, and Levels: Statistical Power in Conjoint Experiments",
+  author  = c(person("Alberto", "Stefanelli"), person("Martin", "Lukac")),
+  year    = "2020",
+  note    = "SocArXiv preprint",
+  doi     = "10.31235/osf.io/spkcy"
+)

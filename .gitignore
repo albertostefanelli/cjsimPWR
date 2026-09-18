@@ -6,3 +6,7 @@
 .RData
 .Ruserdata
 help.out
+
+# Local working material: test suite, validation study and planning documents
+private/
+README.html
