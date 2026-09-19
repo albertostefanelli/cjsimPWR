@@ -146,7 +146,17 @@ gives a power of 0.61, and simulation gives between 0.48 and 0.65 depending on t
 [docs/closed_form.md](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/closed_form.md)
 explains each assumption in plain terms, with the simulations behind these numbers.
 
+A conjoint simulation can also be assembled in
+[DeclareDesign](https://declaredesign.org/r/declaredesign/) (Blair et al., 2019), which declares and
+diagnoses research designs of every kind. Being general, it takes more work to set up for a conjoint
+experiment and offers fewer conjoint-specific features than `power_sim()`;
+[docs/declaredesign.md](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/declaredesign.md)
+compares the two.
+
 ## References
+
+Blair, G., Cooper, J., Coppock, A., & Humphreys, M. (2019). Declaring and diagnosing research designs.
+*American Political Science Review*, 113(3), 838–859.
 
 Gelman, A., & Carlin, J. (2014). Beyond power calculations: Assessing Type S (sign) and Type M
 (magnitude) errors. *Perspectives on Psychological Science*, 9(6), 641–651.

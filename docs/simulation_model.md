@@ -60,6 +60,19 @@ runs. `latent_sigma` instead fixes the SD of the utility deviations and reports 
 (`amce_sd` in the `truth` table); only one of the two can be given. The deprecated `sigma.u_k` of versions
 up to 0.2.1 is treated as `sigma`.
 
+Individual AMCEs are approximately, not exactly, normal, because the map from utility coefficients to
+AMCEs is nonlinear. For a requested AMCE of zero the distribution is exactly symmetric around zero.
+For small effects and modest heterogeneity it can be close to normal. For example, in single-attribute
+simulations with two or five levels and all other level targets set to zero, a requested AMCE of 0.03
+and `sigma = 0.05` give about 27–28% of respondents a negative effect, against 27.4% under a normal
+distribution. A left skew can appear when the requested positive AMCE and `sigma` are both large,
+particularly for attributes with few levels, because no respondent's AMCE can reach `1 - 1/L` either.
+In the same designs, a requested AMCE of 0.20 and `sigma = 0.20` give skewness of about -0.4 for a
+five-level attribute and -0.8 for a binary one, with about 17–18% of respondents having a negative
+effect, against 15.9% under a normal distribution. The shape also depends on the other attributes and
+their effects. Calibration targets the requested population mean and SD using the separate AMCE and
+SD tolerances described below.
+
 There is no generally valid value of `sigma`. Without pilot data, compare runs with several values while
 keeping the requested AMCEs fixed. `sigma` barely affects power when each respondent completes one task,
 and matters more the more tasks they complete (see rows 5 to 7 of the
