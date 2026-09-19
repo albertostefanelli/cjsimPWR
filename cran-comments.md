@@ -5,28 +5,31 @@ GitHub.
 
 ## Test environments
 
-Checks recorded on 2026-09-18:
+The local check was run on 2026-09-19; the GitHub Actions checks were run on 2026-09-18.
 
 * local: macOS 13.7.8 (aarch64-apple-darwin21.5.0), R 4.2.1
 * GitHub Actions: macOS, R release
 * GitHub Actions: Windows, R release
 * GitHub Actions: Ubuntu, R release, R-devel and R oldrel-1
 
-All five GitHub Actions jobs passed for source commit `691a387`:
-https://github.com/albertostefanelli/cjsimPWR/actions/runs/35407136812
+All five GitHub Actions jobs passed for source commit `b33b9d2`:
+https://github.com/albertostefanelli/cjsimPWR/actions/runs/35408165008
 
-The local check used `R CMD check --as-cran --run-donttest`, including PDF manual generation.
+The local check used `R CMD check --as-cran --run-donttest`, including PDF manual generation, with
+`_R_CHECK_SYSTEM_CLOCK_=false`. R 4.2.1 could not reach its remote time service, worldtimeapi.org.
+The local clock was independently verified against the CRAN HTTPS response timestamp and timeapi.io;
+both agreed within one second. Only the remote clock probe was disabled. The check for future file
+timestamps remained enabled and passed.
 The CI checks used `--no-manual --as-cran --run-donttest`.
 
 ## R CMD check results
 
-Local check: 0 errors | 0 warnings | 2 notes
+Local check: 0 errors | 0 warnings | 1 note
 
-* CRAN incoming feasibility identifies a new submission and reports HTTP 403 for
-  DOI `10.1177/1745691614551642`. This is the valid DOI for Gelman and Carlin (2014), verified against
-  Crossref and the publisher's article record. Automated requests from the local check environment
-  are denied access; the citation has been retained.
-* The local environment reports `unable to verify current time` when checking timestamps.
+* CRAN incoming feasibility identifies a new submission. It also reports HTTP 403 after
+  `https://doi.org/10.1177/1745691614551642` redirects to the SAGE article page. Crossref confirms this
+  DOI for Gelman and Carlin (2014), "Beyond Power Calculations". The publisher denies the automated
+  request from the local check environment; the valid DOI has been retained.
 
 The published documentation URLs are accessible, and a separate `urlchecker::url_check()` passed.
 
