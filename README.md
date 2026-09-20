@@ -213,7 +213,8 @@ rated profiles, the formula gives a power of 0.61, and simulation gives
 between 0.48 and 0.65 depending on the design.
 [docs/closed_form.md](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/closed_form.md)
 explains each assumption in plain terms, with the simulations behind
-these numbers.
+these numbers, and notes two points where cjpowR’s implementation
+differs from the design simulated here.
 
 A conjoint simulation can also be assembled in
 [DeclareDesign](https://declaredesign.org/r/declaredesign/) (Blair et

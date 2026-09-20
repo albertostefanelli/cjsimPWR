@@ -144,7 +144,8 @@ answers where their assumptions hold:
 The first two err in opposite directions: for an AMCE of 0.05 and 2,000 rated profiles, the formula
 gives a power of 0.61, and simulation gives between 0.48 and 0.65 depending on the design.
 [docs/closed_form.md](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/closed_form.md)
-explains each assumption in plain terms, with the simulations behind these numbers.
+explains each assumption in plain terms, with the simulations behind these numbers, and notes
+two points where cjpowR's implementation differs from the design simulated here.
 
 A conjoint simulation can also be assembled in
 [DeclareDesign](https://declaredesign.org/r/declaredesign/) (Blair et al., 2019), which declares and

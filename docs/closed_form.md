@@ -161,6 +161,35 @@ precise, and the resulting power of 0.62 is close to the formula's 0.61. The agr
 coincidence. With more tasks or more heterogeneity the formula would be too optimistic, and with larger
 effects on the other attributes too pessimistic; only a simulation of the design shows which.
 
+## Two differences from cjpowR's implementation
+
+The three assumptions above are deliberate simplifications of the design. Two further points are
+matters of implementation, and both affect what `cjpowR::cjpowr_amce()` returns. They refer to
+[cjpowR 1.0.2](https://github.com/m-freitag/cjpowR/blob/5852d88338235abc28919b2941ea56fe0532d48d/R/amce.R).
+
+**The baseline choice probability.** `treat.prob` defaults to 0.5, which places the reference level's
+choice probability at `0.5 - AMCE / 2`, as above. In a uniformly randomized forced-choice design the
+marginal choice probabilities must average 0.5 across all L levels of an attribute, which places it at
+`0.5 - sum(AMCE) / L`, summing over all non-reference levels. The two agree whenever an attribute has
+two levels. With more levels they agree only when `sum(AMCE) / L` equals half the AMCE being evaluated;
+they can differ even when only one AMCE is nonzero. For a four-level attribute with AMCEs of 0.05,
+0.10 and 0.15, the baseline implied by the requested effects is 0.425, whereas the default assumes
+0.475 when evaluating the 0.05 contrast. For a fixed AMCE, centering the two choice probabilities on
+0.5 maximizes the sum of their variances, so the default is conservative on this count: across the
+effect targets on this page at 2,000 profiles, it inflates the formula's standard error by at most
+0.8% and lowers power by at most 0.005 relative to using the design-implied baseline.
+
+**Type S error for negative AMCEs.** `cjpowr_amce()` computes `type_s` as
+`pnorm(-AMCE / se - qnorm(1 - alpha / 2)) / power`, the probability that a significant estimate falls
+below zero. That is the wrong-sign tail only when the AMCE is positive; for a negative AMCE it is the
+right-sign tail, so the value returned is one minus the correct one. At `amce = -0.10`, `n = 2000`
+and `levels = 3` it reports a Type S error of approximately 1 (0.9999999906), whereas the wrong-sign
+probability under the same normal approximation and standard error is 9.4e-09. `power_sim()` reports
+the observed wrong-sign share in `type_s`, which is zero if no significant estimates have the wrong
+sign. Its separate `analytic_type_s` uses the empirical standard deviation of the simulated estimates,
+so it need not equal 9.4e-09. With `n` supplied, cjpowR's two-sided `power` calculation handles AMCEs
+of either sign correctly, as does its `type_s` calculation for positive AMCEs.
+
 ## Reproducing the comparison
 
 ```r
@@ -206,6 +235,25 @@ for (inference in c("normal", "t")) {
                    sigma = 0.10, inference = inference, sim_runs = 4000, seed = 1)
   print(few)  # the default output includes power and Type I error, each with its Monte Carlo SE
 }
+```
+
+The implementation examples can be reproduced separately (the Type S comparison requires cjpowR):
+
+```r
+amces <- c(0.05, 0.10, 0.15)
+0.5 - sum(amces) / (length(amces) + 1)  # 0.425: design-implied baseline
+0.5 - amces[1] / 2                     # 0.475: default for the 0.05 contrast
+
+negative <- cjpowR::cjpowr_amce(amce = -0.10, n = 2000, levels = 3, sims = 0)
+negative$type_s                       # 0.9999999906
+se <- sqrt((0.55 * 0.45 + 0.45 * 0.55) / (2000 / 3))
+pnorm(-abs(-0.10) / se - qnorm(0.975)) / negative$power  # 9.430218e-09
+
+negative_sim <- cjsimPWR::power_sim(
+  levels = 3, true_amce = list(c(-0.10, 0)), units = 1000, n_tasks = 1,
+  sim_runs = 1000, seed = 1
+)
+negative_sim$performance[1, c("type_s", "analytic_type_s", "n_sig")]
 ```
 
 ## References
