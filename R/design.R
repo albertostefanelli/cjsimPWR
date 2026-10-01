@@ -1,16 +1,23 @@
 #' Conjoint design
 #'
-#' Describes the attributes of a paired conjoint design. Every attribute of both profiles in a task is
-#' drawn independently and uniformly, as in a fully randomized design.
+#' Constructs the design specification for a paired conjoint experiment: the attributes, their level
+#' labels and their reference levels. Drawing profiles from this design happens in
+#' [simulate_experiment()], where every attribute of both profiles in a task is drawn independently
+#' and uniformly, as in a fully randomized design.
 #'
 #' @param levels either a vector with the number of levels of each attribute, or a list with the level
 #'   labels of each attribute. Names give the attribute names; unnamed attributes are called `var_1`,
 #'   `var_2`, and so on. Level counts give the labels `"0"`, `"1"`, and so on. The first level of each
-#'   attribute is its reference level. Attributes keep the order given, and there is no limit on their
-#'   number.
+#'   attribute is its reference level. Attributes keep the order given; the number of attributes is
+#'   determined by `levels`.
+#'
+#'   Every attribute needs at least two levels; level labels within an attribute must be distinct and
+#'   non-missing. Attribute names must be unique, and none may be `"group"`, `"respondent"`, `"task"`,
+#'   `"profile"` or `"y"` — names reserved for columns [simulate_experiment()] adds.
 #'
 #' @return A `cj_design` object: a list with the level labels of each attribute (`levels`) and the number
 #'   of levels of each attribute (`n_levels`).
+#' @seealso [simulate_experiment()], [power_sim()]
 #' @export
 #' @md
 #' @examples

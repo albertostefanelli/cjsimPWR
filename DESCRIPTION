@@ -7,15 +7,16 @@ Authors@R: c(
     person("Martin", "Lukac", email = "m.b.lukac@gmail.com", role = c("aut", "cph")),
     person("Andrew G.", "Timm", role = c("ctb", "cph"),
            comment = "Author of the closed-form Type S and Type M code adapted from the 'retrodesign' package"))
-Description: Simulation-based power analysis for forced-choice conjoint experiments that estimate
-    average marginal component effects (AMCEs) as defined by Hainmueller, Hopkins and Yamamoto (2014)
-    <doi:10.1093/pan/mpt024>. Choices are simulated from a logit model calibrated so that the true
-    AMCEs match requested effects within a calibration tolerance, optionally with respondent
-    heterogeneity and respondent subgroups. AMCEs and differences between subgroups are estimated by
-    least squares with respondent-clustered standard errors. Power, Type I error and coverage are
-    reported with Monte Carlo standard errors, as are the Type S and Type M errors of Gelman and Carlin
-    (2014) <doi:10.1177/1745691614551642>. Extends the simulation framework of Stefanelli and Lukac
-    (2020) <doi:10.31235/osf.io/spkcy>.
+Description: Simulation-based power analysis for paired, forced-choice conjoint experiments that
+    estimate average marginal component effects (AMCEs) as defined by Hainmueller, Hopkins and
+    Yamamoto (2014) <doi:10.1093/pan/mpt024>. Choices are simulated from a logit model calibrated so
+    that the population AMCEs match requested effects within a calibration tolerance, optionally with
+    respondent heterogeneity and respondent subgroups; AMCEs and differences between subgroups are
+    estimated by least squares with respondent-clustered standard errors. Power and coverage are
+    reported for every effect; Type I error is reported for null targets, and Type S and Type M errors
+    of Gelman and Carlin (2014) <doi:10.1177/1745691614551642> for non-null targets where they are
+    defined; every reported rate carries a Monte Carlo standard error. Extends the simulation framework
+    of Stefanelli and Lukac (2020) <doi:10.31235/osf.io/spkcy>.
 License: GPL (>= 3)
 Encoding: UTF-8
 Depends: R (>= 4.0)

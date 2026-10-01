@@ -1,15 +1,21 @@
 # Clustering
 
-The package default estimates AMCEs by ordinary least squares on profile rows with standard errors clustered by respondent. Clustering by respondent is always on. Two arguments control the rest:
+The package default estimates AMCEs by ordinary least squares on profile rows with standard errors
+clustered by respondent. Clustering by respondent is always on; `vcov` (`"CR1"` or `"CR2"`) and
+`inference` (critical values) control the rest. Neither choice changes the point estimates.
 
-- `vcov`: how the clustered covariance is computed, `"CR1"` (default) or `"CR2"`.
-- `inference`: the critical values, `"normal"`, `"t"` or `"Satterthwaite"`. If omitted, CR1 uses
-  `"normal"` and CR2 uses `"Satterthwaite"`.
+| Method | `vcov` | `inference` | Degrees of freedom | Dependency |
+| --- | --- | --- | --- | --- |
+| CR1 / normal (default) | `"CR1"` | `"normal"` (default for CR1) | `Inf` | Base R (`sandwich`). Matches `cjoint::amce(cluster = TRUE)` for the unweighted specification, and Stata's `vce(cluster)` (Barari et al.). |
+| CR1 / t | `"CR1"` | `"t"` | `G - 1`, where `G` is every respondent in the joint fit, groups included | Base R (`sandwich`). The `G - 1` approximation can be poor for a small subgroup even when the joint fit has many respondents. |
+| CR2 / Satterthwaite (default for CR2) | `"CR2"` | `"Satterthwaite"` (default for CR2; `"normal"`/`"t"` also accepted, but Satterthwaite itself requires CR2) | Per effect, from the respondents that inform it (Pustejovsky and Tipton 2018) | Requires the `clubSandwich` package. Bias-reduced (Bell and McCaffrey 2002). |
 
-The default, CR1 with normal critical values, gives the same standard errors, p-values and confidence
-intervals as `cjoint::amce()` with `cluster = TRUE`.[^cr1] Neither choice changes the point estimates.
-`vcov` changes the standard errors; switching from normal to t inference leaves them unchanged but
-changes p-values and confidence intervals. Both choices can affect power, Type I error, coverage, Type S and Type M.
+CR1 is the cluster-robust sandwich covariance with the small-sample factor
+`G/(G-1) * (n-1)/(n-k)` (`G` respondents, `n` profile rows, `k` coefficients) — `sandwich::vcovCL(type = "HC1", cadjust = TRUE)`,
+`clubSandwich`'s `"CR1S"` (not its differently named `"CR1"`), and `estimatr::lm_robust(se_type = "stata")`.
+With 1,000 respondents in one group and 30 in another, `inference = "t"` uses 1,029 degrees of freedom for
+every effect, while CR2/Satterthwaite computes degrees of freedom from the realized design for each AMCE
+and group difference — these can be much smaller and are not determined by group sizes alone.
 
 ## Selecting a method
 
@@ -19,41 +25,22 @@ library(cjsimPWR)
 # A zero AMCE lets each method report Type I error as well as power
 amce <- list(0.05, c(-0.05, 0), c(-0.03, -0.05, -0.05, 0.05))
 
-# Default: CR1 covariance, normal critical values (as cjoint::amce())
-power_sim(levels = c(2, 3, 5), true_amce = amce, units = 500, n_tasks = 5, seed = 1)
+common <- list(levels = c(2, 3, 5), 
+	true_amce = amce, 
+	units = 500, 
+	n_tasks = 5, 
+	seed = 1)
 
-# CR1 covariance, t critical values with G - 1 degrees of freedom (G = respondents in the fit)
-power_sim(levels = c(2, 3, 5), true_amce = amce, units = 500, n_tasks = 5, seed = 1,
-          inference = "t")
-
-# CR2 covariance, Satterthwaite degrees of freedom for each effect (needs clubSandwich)
-power_sim(levels = c(2, 3, 5), true_amce = amce, units = 500, n_tasks = 5, seed = 1,
-          vcov = "CR2", cores = 2)
-
-# The same arguments apply to a single data set
-design <- conjoint_design(c(2, 3, 5))
-data <- simulate_experiment(design, amce, units = 500, n_tasks = 5)
-estimate_amce(data, design, vcov = "CR2")
+do.call(power_sim, common)                                          # default: CR1, normal
+do.call(power_sim, c(common, list(inference = "t")))                # CR1, t (G - 1 df)
+do.call(power_sim, c(common, list(vcov = "CR2")))                   # CR2, Satterthwaite (needs clubSandwich)
 ```
 
 Compare power together with the Type I error shown for the zero effect: higher rejection rates can
 reflect more false positives, not greater precision. At `alpha = 0.05`, aim for Type I error near 5%,
 allowing for its Monte Carlo standard error. A check for one null effect does not validate every other
-effect or subgroup; rerun with the effect of interest set to zero when needed.
-
-## What the options do
-
-- **CR1** is the usual cluster-robust sandwich estimator with the small-sample factor
-  G/(G − 1) × (n − 1)/(n − k), where G is the number of respondents, n the number of profile rows
-  and k the number of coefficients.[^cr1]
-- **t** uses G − 1 degrees of freedom, where G counts all respondents in the fit, groups included.
-  A small subgroup in a large sample therefore gets the large sample's degrees of freedom.
-- **CR2** is the bias-reduced covariance of Bell and McCaffrey (2002), and **Satterthwaite** gives
-  each effect its own degrees of freedom, driven by the respondents that inform it (Pustejovsky and
-  Tipton 2018).[^cr2] For instance, with 1,000 respondents in one group and 30 in another, `inference = "t"` uses
-  1,029 degrees of freedom for every effect; CR2/Satterthwaite computes degrees of freedom from the
-  realized design for each AMCE and group difference. These can be much smaller and cannot be
-  determined from group sizes alone.[^cost]
+effect or subgroup; see the [Type I error guide](type_1_error.md#checking-an-effect) for rerunning with
+an effect of interest set to zero.
 
 ## Which to use
 
@@ -85,16 +72,6 @@ level (Abadie, Athey, Imbens and Wooldridge 2023). For instance, when 20 of 1,00
 and respondents are then sampled within them, the cities are the sampled units and standard errors must
 be clustered by city.[^cities] This option is not available in the package, as such designs are rare in political-science conjoint experiments.
 
-[^cr1]: The same numbers as Stata's `vce(cluster)`, `sandwich::vcovCL(type = "HC1")`,
-    `clubSandwich::vcovCR(type = "CR1S")` (not its `"CR1"`), `estimatr::lm_robust(se_type = "stata")`
-    and `cjoint::amce(cluster = TRUE)` for an unweighted model.
-
-[^cr2]: The 2023 corrigendum to Pustejovsky and Tipton concerns a computational shortcut for
-    fixed-effects models; it does not affect the unweighted OLS fit used here.
-
-[^cost]: CR2 is slower: roughly 0.4 s per fit against 6 ms for CR1 in the design above, which is
-    several minutes for the default 1,000 runs. Use `cores`.
-
 [^one]: This also holds with one task per respondent. A task contributes two linked rows, one chosen
     and one rejected, so a respondent is one cluster even with a single task, and respondent and
     task clustering coincide. In a fully randomized design the clustered and unclustered standard
@@ -120,25 +97,20 @@ Abadie, A., Athey, S., Imbens, G. W., & Wooldridge, J. M. (2023). When should yo
 errors for clustering? *The Quarterly Journal of Economics*, 138(1), 1–35.
 <https://doi.org/10.1093/qje/qjac038>
 
-Bansak, K., Hainmueller, J., Hopkins, D. J., & Yamamoto, T. (2018). The number of choice tasks and
-survey satisficing in conjoint experiments. *Political Analysis*, 26(1), 112–119.
-
 Bell, R. M., & McCaffrey, D. F. (2002). Bias reduction in standard errors for linear regression with
 multi-stage samples. *Survey Methodology*, 28(2), 169–181.
 
 Hainmueller, J., Hopkins, D. J., & Yamamoto, T. (2014). Causal inference in conjoint analysis:
 Understanding multidimensional choices via stated preference experiments. *Political Analysis*,
-22(1), 1–30.
-
-Leeper, T. J., Hobolt, S. B., & Tilley, J. (2020). Measuring subgroup preferences in conjoint
-experiments. *Political Analysis*, 28(2), 207–221.
+22(1), 1–30. <https://doi.org/10.1093/pan/mpt024>
 
 MacKinnon, J. G., Nielsen, M. Ø., & Webb, M. D. (2023). Cluster-robust inference: A guide to empirical
-practice. *Journal of Econometrics*, 232(2), 272–299.
+practice. *Journal of Econometrics*, 232(2), 272–299. <https://doi.org/10.1016/j.jeconom.2022.04.001>
 
 Pustejovsky, J. E., & Tipton, E. (2018). Small-sample methods for cluster-robust variance estimation
 and hypothesis testing in fixed effects models. *Journal of Business & Economic Statistics*, 36(4),
-672–683. Corrigendum (2023): <https://doi.org/10.1080/07350015.2023.2174123>
+672–683. <https://doi.org/10.1080/07350015.2016.1247004>. Corrigendum (2023):
+<https://doi.org/10.1080/07350015.2023.2174123>
 
 Barari, S., Berwick, E., Hainmueller, J., Hopkins, D., Liu, S., Strezhnev, A., & Yamamoto, T. cjoint:
 AMCE estimator for conjoint experiments. R package. <https://CRAN.R-project.org/package=cjoint>

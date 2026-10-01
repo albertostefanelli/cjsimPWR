@@ -7,16 +7,20 @@
 #'   to the attributes by name when named and by position otherwise. With groups, either one such list for
 #'   all groups or a list of them named by group. Named coefficient vectors are matched to the design's
 #'   non-reference level labels; unnamed vectors follow the design's level order.
-#' @param units number of respondents: one number, or one per group (matched by name when named).
-#' @param n_tasks number of tasks per respondent: one number, or one per group.
+#' @param units positive whole number of respondents: one number, repeated for every group, or one per
+#'   group, matched by name when named and by group order otherwise.
+#' @param n_tasks positive whole number of tasks per respondent: one number, repeated for every group, or
+#'   one per group, matched by name when named and by group order otherwise.
 #' @param groups `NULL`, or the names of the respondent groups.
-#' @param sigma heterogeneity of preferences: the standard deviation, across respondents, of each
-#'   respondent's own AMCE, on the probability scale (`sigma = 0.05` means individual AMCEs spread
-#'   with SD 0.05 around the requested AMCE). Available for the logit model; the linear model requires
-#'   `sigma = 0`. A requested zero AMCE stays zero in the population; individual respondents can still
-#'   have positive or negative effects under heterogeneity.
-#'   There is no generally valid value: use pilot evidence where available, otherwise compare labelled
-#'   scenarios such as `sigma = c(0, 0.05, 0.10, 0.15)` with the requested AMCEs held fixed.
+#' @param sigma heterogeneity of preferences: a single non-negative number, the standard deviation,
+#'   across respondents, of each respondent's own AMCE, on the probability scale (`sigma = 0.05` means
+#'   individual AMCEs spread with SD 0.05 around the requested AMCE). One call takes one `sigma`, shared
+#'   across effects and groups; it does not accept a vector. Available for the logit model; the linear
+#'   model requires `sigma = 0`. A requested zero AMCE stays zero in the population; individual
+#'   respondents can still have positive or negative effects under heterogeneity.
+#'   There is no generally valid value: use pilot evidence where available, otherwise compare separate
+#'   calls at labelled candidate values (for example, 0, 0.05, 0.10 and 0.15) with the requested AMCEs
+#'   held fixed.
 #' @param dgp choice model: `"logit"` (default), calibrated so that generated AMCEs match `true_amce`
 #'   within the calibration tolerance;
 #'   `"linear"`, where the AMCEs equal `true_amce` exactly but no heterogeneity is possible; or
@@ -28,66 +32,94 @@
 #' @param model optional prepared `cj_dgp` object, from a previous simulation's `dgp` attribute or
 #'   [power_sim()]'s `model`, for repeated experiments without recalibration.
 #'   Supply the same design and omit true_amce, sigma, dgp, latent_sigma and calibration_control.
-#' @param calibration_control optional named list of calibration settings; see the "Calibration" section.
-#'   `reference_margin = 0.5` enables experimental precision planning; its default of zero
-#'   retains the original calibration and reference budgets.
+#' @param calibration_control optional named list of calibration settings; see the Calibration section
+#'   of [simulate_experiment()] below. `reference_margin = 0.5` enables experimental precision planning;
+#'   its default of zero retains the original calibration and reference budgets.
 #'
 #' @section Calibration: For the logit model the package solves for coefficients whose AMCEs approximate
 #'   `true_amce` (and, with `sigma > 0`, whose respondent-level AMCEs have SD `sigma`), then verifies the
-#'   result with fresh reference draws. Verification stops when every true AMCE is within `tolerance`
-#'   (default 0.001) of its request, with 99% Monte Carlo confidence, and every AMCE SD within
-#'   `min(0.005, 0.05 * sigma)`; otherwise the calibration stops with an error. Designs with at most
-#'   `exact_max_pairs` (default 10,000) profile pairs are enumerated exactly; larger designs are
-#'   integrated by Monte Carlo. With `sigma > 0`, calibration takes seconds for small designs but can
-#'   take many minutes when profiles must be sampled. The
-#'   remaining settings (`seed`, `maxit`, `solver_tol`, `calibration_pairs`, `calibration_draws`,
-#'   `verification_pairs`, `verification_draws`, `verification_batches`, `max_verification_batches`,
-#'   `max_attempts`) control the solver and the size of the reference draws; their defaults are listed
-#'   in `attr(data, "dgp")$control`. Calibration uses its own random seed and leaves the caller's random
-#'   numbers unchanged.
-#'   After acceptance, a fresh reference uses the accepted verification's integration settings and,
-#'   by default, its number of batches. It is never retried or used to recalibrate. `diagnostics[[g]]$verification`
-#'   records acceptance; `$reference` records the final estimate used in `truth`. A recheck that
-#'   overlaps a tolerance boundary is quietly retained with `accepted = FALSE`. A warning is issued
-#'   only when an interval lies wholly outside its target's tolerance band: `abs(estimate - target)`
-#'   minus its half-width exceeds the tolerance. Then `contradicted = TRUE`; the model and reference
-#'   are retained. Exact integration needs no fresh draws. Separately calibrated group contrasts match their requests within `tolerance`
-#'   by verifying each group's AMCE within half that tolerance; they are not forced to zero.
+#'   solution against fresh reference draws at a nominal 99% Monte Carlo confidence. Verification stops
+#'   when every true AMCE is within `tolerance` of its request and every AMCE SD is within
+#'   `min(0.005, 0.05 * sigma)`; otherwise calibration stops with an error. Exact enumeration concerns
+#'   profile combinations: designs with at most `exact_max_pairs` profile pairs are enumerated exactly,
+#'   while larger designs integrate over sampled profiles. With heterogeneity, integration over
+#'   respondent coefficients uses Monte Carlo draws even when profile pairs are enumerated exactly.
+#'   Calibration uses its own random seed
+#'   (`calibration_control$seed`) and leaves the caller's random numbers unchanged.
 #'
-#'   Experimental precision planning is enabled with `reference_margin = m`, where `0 < m < 1`
-#'   (suggested starting value 0.5; default 0 disables it). Verification then requires each estimated
-#'   gap plus its margin to be at most `(1 - m)` times its AMCE or SD tolerance. The final reference
-#'   retains the original tolerances. Before its draws, verification batch variances, inflated by a
-#'   factor of two, determine the smallest batch count predicting half-widths at most `m * tolerance / 2`
-#'   for every targeted quantity. Integration settings per batch stay fixed. The minimum batch count
-#'   is `verification_batches`; `max_reference_batches` (default 512) caps the final count per group.
-#'   `diagnostics[[g]]$reference_plan` records `batches`, `cap_limited`, `predicted_precision_met`,
-#'   realised `precision_met`, and a `quantities` table with targets, predictions and actual half-widths.
-#'   A cap or missed width target is diagnostic, not itself a warning or a reason to redraw. The
-#'   inflation is a planning allowance, not a variance confidence bound; confirmation is not guaranteed.
-#'   Stricter verification can take longer or exhaust its budget. Exact references need zero batches.
-#'   This option requires AMCE targets and is unavailable for the legacy odds model.
+#'   After acceptance, a fresh, independent reference — never retried or used to recalibrate — supplies
+#'   the true AMCEs, SDs and their Monte Carlo precision in `truth`. `diagnostics[[g]]$verification`
+#'   records acceptance; `diagnostics[[g]]$reference` records this final estimate. Three outcomes follow:
+#'   a recheck fully inside its tolerance band is accepted; one that overlaps the boundary is retained
+#'   quietly with `accepted = FALSE` (inconclusive); one that lies wholly outside its band
+#'   (`abs(estimate - target) - half-width > tolerance`) is retained with `contradicted = TRUE` and a
+#'   warning. Separately calibrated group contrasts match their requests within `tolerance` by verifying
+#'   each group's AMCE within half that tolerance; they are not forced to zero.
 #'
-#'   The deprecated odds model has fixed scores rather than AMCE/SD targets. On each precision retry,
-#'   it doubles `verification_pairs` and `verification_draws`, up to `max_attempts`, without changing
-#'   the tolerance or drawing unused training samples. Exhausting this budget stops with a reference
-#'   precision error. Its final `accepted` flag records precision only; `contradicted` is FALSE because
-#'   there are no AMCE/SD targets to test. The separate null-sensitivity warning in [power_sim()] is unchanged.
+#'   **Controls.** `calibration_control` accepts these named settings (defaults from `dgp_controls()`,
+#'   also listed in `attr(data, "dgp")$control`):
+#'
+#'   | Setting | Default | Role |
+#'   | --- | ---: | --- |
+#'   | `seed` | 104729 | Solver: calibration's own random seed, independent of the caller's RNG. |
+#'   | `maxit` | 100 | Solver: maximum solver iterations. |
+#'   | `solver_tol` | 1e-6 | Solver: solver convergence tolerance. |
+#'   | `tolerance` | 0.001 | Solver: verification tolerance for AMCE and SD targets. |
+#'   | `exact_max_pairs` | 10000 | Integration: profile-pair count below which integration is exact. |
+#'   | `calibration_pairs` | 16384 | Integration: sampled profile pairs per solver iteration (when not exact). |
+#'   | `calibration_draws` | 2048 | Integration: respondent draws per profile pair while solving. |
+#'   | `verification_pairs` | 32768 | Integration: profile pairs sampled per verification batch. |
+#'   | `verification_draws` | 1024 | Integration: respondent draws per profile pair per batch. |
+#'   | `verification_batches` | 16 | Integration: batches per verification attempt; also the minimum reference batch count. |
+#'   | `max_verification_batches` | 128 | Integration: batch cap for one verification attempt. |
+#'   | `max_attempts` | 4 | Integration: verification attempts allowed before calibration stops with an error. |
+#'   | `reference_margin` | 0 | Precision planning: see below. |
+#'   | `max_reference_batches` | 512 | Precision planning: cap on the final reference's batch count per group. |
+#'
+#'   **Precision planning (experimental).** `reference_margin` (`0 <= reference_margin < 1`) reserves
+#'   verification headroom and plans the final reference's batch count from the verification variances.
+#'   The default of 0 disables the option and retains the original calibration and reference budgets; a
+#'   positive value (suggested starting point 0.5) can increase calibration runtime or cause stricter
+#'   verification to fail. `max_reference_batches` caps the final budget per group.
+#'   `diagnostics[[g]]$reference_plan` reports `batches`, `cap_limited`, `predicted_precision_met` and
+#'   realised `precision_met`. A batch cap or a missed precision target alone does not raise a warning,
+#'   and meeting the target is not guaranteed. This option requires AMCE targets and is unavailable for
+#'   the legacy odds model; see the [calibration guide](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/calibration.md)
+#'   (online) for the full derivation and reading guide.
+#'
+#'   The deprecated odds model has fixed scores rather than AMCE/SD targets, so verification checks
+#'   numerical precision only: each retry doubles `verification_pairs` and `verification_draws`, up to
+#'   `max_attempts`, without changing the tolerance. Exhausting this budget stops with a reference
+#'   precision error. Its final `accepted` flag records precision only; `contradicted` is always FALSE,
+#'   since there are no AMCE/SD targets to test. The separate null-sensitivity warning in [power_sim()]
+#'   is unchanged.
 #'
 #' @return A data frame with one row per profile and columns `group` (`NA` without groups), `respondent`
 #'   (unique across groups), `task`, `profile` (1 or 2), `y` (1 if the profile was chosen) and one factor
-#'   per attribute, named as in the design. Attribute `dgp` contains the prepared model, including
-#'   the true AMCEs, calibrated parameters and calibration diagnostics.
-#'   Calibration/reference calculations preserve the caller's RNG; sampling the experiment advances it.
+#'   per attribute, named as in the design. Attribute `dgp` contains the prepared model (class `cj_dgp`),
+#'   including:
+#'   * `truth`: one row per effect, with `attribute`, `level` (and `group`/`reference_group` with groups),
+#'     `requested_amce`, `true_amce` (the numerical reference), `reference_mcse`, `reference_half_width`,
+#'     `amce_sd` (implied SD under heterogeneity), `sd_mcse` and `sd_half_width`. Subgroup-difference rows
+#'     have `amce_sd`, `sd_mcse` and `sd_half_width` equal to `NA`. This table has no `effect_id` column;
+#'     that identifier is added by [power_sim()].
+#'   * `parameters`, `diagnostics`: calibrated latent parameters and the per-group calibration diagnostics
+#'     described above.
+#'   * `control`: the resolved `calibration_control` settings, including defaults.
+#'
+#'   Calibration and reference calculations preserve the caller's RNG exactly; only sampling the
+#'   experiment itself (the returned profile rows) advances it.
 #' @export
 #' @md
 #' @examples
 #' design <- conjoint_design(c(2, 3))
+#' set.seed(1)
 #' data <- simulate_experiment(design, list(0.05, c(-0.05, 0.1)), units = 100, n_tasks = 3)
 #' head(data)
 #' attr(data, "dgp")$truth
 #'
 #' # heterogeneous preferences: individual AMCEs have SD 0.05 around the requested values
+#' set.seed(1)
 #' mixed <- simulate_experiment(design, list(0.05, c(-0.05, 0.1)), units = 100, n_tasks = 3,
 #'                              sigma = 0.05)
 #' attr(mixed, "dgp")$truth[, c("attribute", "level", "true_amce", "amce_sd")]

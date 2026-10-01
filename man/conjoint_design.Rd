@@ -10,18 +10,27 @@ conjoint_design(levels)
 \item{levels}{either a vector with the number of levels of each attribute, or a list with the level
 labels of each attribute. Names give the attribute names; unnamed attributes are called \code{var_1},
 \code{var_2}, and so on. Level counts give the labels \code{"0"}, \code{"1"}, and so on. The first level of each
-attribute is its reference level. Attributes keep the order given, and there is no limit on their
-number.}
+attribute is its reference level. Attributes keep the order given; the number of attributes is
+determined by \code{levels}.
+
+Every attribute needs at least two levels; level labels within an attribute must be distinct and
+non-missing. Attribute names must be unique, and none may be \code{"group"}, \code{"respondent"}, \code{"task"},
+\code{"profile"} or \code{"y"} — names reserved for columns \code{\link[=simulate_experiment]{simulate_experiment()}} adds.}
 }
 \value{
 A \code{cj_design} object: a list with the level labels of each attribute (\code{levels}) and the number
 of levels of each attribute (\code{n_levels}).
 }
 \description{
-Describes the attributes of a paired conjoint design. Every attribute of both profiles in a task is
-drawn independently and uniformly, as in a fully randomized design.
+Constructs the design specification for a paired conjoint experiment: the attributes, their level
+labels and their reference levels. Drawing profiles from this design happens in
+\code{\link[=simulate_experiment]{simulate_experiment()}}, where every attribute of both profiles in a task is drawn independently
+and uniformly, as in a fully randomized design.
 }
 \examples{
 conjoint_design(c(2, 3, 4))
 conjoint_design(list(price = c("low", "high"), quality = c("standard", "premium")))
+}
+\seealso{
+\code{\link[=simulate_experiment]{simulate_experiment()}}, \code{\link[=power_sim]{power_sim()}}
 }

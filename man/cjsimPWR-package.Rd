@@ -8,18 +8,21 @@
 \description{
 \if{html}{\figure{logo.png}{options: style='float: right' alt='logo' width='120'}}
 
-Simulation-based power analysis for forced-choice conjoint experiments that estimate average marginal component effects (AMCEs) as defined by Hainmueller, Hopkins and Yamamoto (2014) \doi{10.1093/pan/mpt024}. Choices are simulated from a logit model calibrated so that the true AMCEs match requested effects within a calibration tolerance, optionally with respondent heterogeneity and respondent subgroups. AMCEs and differences between subgroups are estimated by least squares with respondent-clustered standard errors. Power, Type I error and coverage are reported with Monte Carlo standard errors, as are the Type S and Type M errors of Gelman and Carlin (2014) \doi{10.1177/1745691614551642}. Extends the simulation framework of Stefanelli and Lukac (2020) \doi{10.31235/osf.io/spkcy}.
+Simulation-based power analysis for paired, forced-choice conjoint experiments that estimate average marginal component effects (AMCEs) as defined by Hainmueller, Hopkins and Yamamoto (2014) \doi{10.1093/pan/mpt024}. Choices are simulated from a logit model calibrated so that the population AMCEs match requested effects within a calibration tolerance, optionally with respondent heterogeneity and respondent subgroups; AMCEs and differences between subgroups are estimated by least squares with respondent-clustered standard errors. Power and coverage are reported for every effect; Type I error is reported for null targets, and Type S and Type M errors of Gelman and Carlin (2014) \doi{10.1177/1745691614551642} for non-null targets where they are defined; every reported rate carries a Monte Carlo standard error. Extends the simulation framework of Stefanelli and Lukac (2020) \doi{10.31235/osf.io/spkcy}.
 }
 \details{
-Use \code{\link[=power_sim]{power_sim()}} to simulate repeated paired, forced-choice conjoint experiments and report
-power, Type I error, coverage, and Type S and Type M errors with Monte Carlo standard errors.
-The default choice model is calibrated to requested average marginal component effects (AMCEs),
-optionally with respondent heterogeneity and respondent subgroups. Estimates use
-respondent-clustered standard errors.
+\code{\link[=power_sim]{power_sim()}} runs the whole analysis described above. For individual steps, use
+\code{\link[=conjoint_design]{conjoint_design()}} to describe the attributes, \code{\link[=simulate_experiment]{simulate_experiment()}} to draw one experiment,
+\code{\link[=estimate_amce]{estimate_amce()}} to analyse it, and \code{\link[=summarise_runs]{summarise_runs()}} to summarise estimates from repeated
+experiments.
 
-For individual steps, use \code{\link[=conjoint_design]{conjoint_design()}} to describe the attributes,
-\code{\link[=simulate_experiment]{simulate_experiment()}} to draw an experiment, \code{\link[=estimate_amce]{estimate_amce()}} to analyse it,
-and \code{\link[=summarise_runs]{summarise_runs()}} to summarise estimates from repeated experiments.
+Full explanations live in the package guides, online:
+\href{https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/simulation_model.md}{simulation model},
+\href{https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/clustering.md}{clustering and inference},
+\href{https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/type_1_error.md}{power and Type I error},
+\href{https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/calibration.md}{calibration and reference precision},
+\href{https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/closed_form.md}{comparison to closed-form power formulas} and
+\href{https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/declaredesign.md}{comparison to DeclareDesign}.
 Run \code{news(package = "cjsimPWR")} for release notes and \code{citation("cjsimPWR")} for citations.
 }
 \seealso{

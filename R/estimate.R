@@ -1,5 +1,8 @@
 #' Estimate AMCEs and differences between subgroup AMCEs
 #'
+#' Fits a single joint least-squares model on profile rows, with respondent-clustered standard errors,
+#' and reports each group's AMCEs together with subsequent-group-minus-first-group contrasts.
+#'
 #' @param data Profile rows with finite numeric `y`, a non-missing `respondent` identifier, the
 #'   design's attribute columns, and `group` when estimating subgroup effects. A respondent must
 #'   belong to only one group. Missing outcomes or attribute values are rejected, never omitted.
@@ -9,38 +12,65 @@
 #'   If NULL, use the group factor's levels, or first appearance for character groups; an absent or
 #'   entirely NA group column means no subgroups. Supply this argument to fix character-group order
 #'   independently of row order. A single group produces AMCEs and no differences.
-#' @param vcov `"CR1"` (default) or `"CR2"`. CR1 is computed with
-#'   `sandwich::vcovCL(type = "HC1", cadjust = TRUE)`: the cluster-robust covariance times
-#'   G/(G-1) * (n-1)/(n-k), where G is all respondents in the joint fit, n is profile rows and k is the
-#'   fitted rank (`clubSandwich`'s `"CR1S"`, and the estimator of `cjoint::amce()` and Stata's
-#'   `vce(cluster)`). CR2 is the bias-reduced estimator of Bell and McCaffrey (2002) and requires the
-#'   `clubSandwich` package.
+#' @param vcov `"CR1"` (default): `sandwich::vcovCL(type = "HC1", cadjust = TRUE)`, the estimator of
+#'   `cjoint::amce(cluster = TRUE)` for the unweighted specification and of Stata's `vce(cluster)`
+#'   (`clubSandwich`'s `"CR1S"`, distinct from its differently named `"CR1"`). `"CR2"`: the bias-reduced
+#'   estimator of Bell and McCaffrey (2002), requiring the `clubSandwich` package. See Details for the
+#'   full CR1 identity and the [clustering guide](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/clustering.md)
+#'   (online) for choosing between them.
 #' @param inference `"normal"`, `"t"` (G-1 df from the joint fit), or `"Satterthwaite"` (CR2 only).
 #'   NULL chooses normal for CR1 and Satterthwaite for CR2. The G-1 approximation can be poor for
 #'   small subgroups, even if the joint fit has many respondents.
 #' @param alpha Significance level for two-sided confidence intervals and tests of zero.
 #'
-#' @return A data frame in supplied group, attribute and level order. AMCE rows precede differences.
-#'   `group` is a display label; `group_name` and `reference_group` identify the contrast without
-#'   parsing labels. Other columns include `type`, `attribute`, `level`, `reference_level`,
-#'   `estimate`, `std.error`, `df`, `statistic`, `p.value`, `conf.low`, `conf.high`, `vcov`,
-#'   `inference`, `n_clusters`, `n_clusters_effect`, `rank`, `status` and `failure_reason`.
-#'   Non-estimable effects retain a row with NA estimates/inference; estimable effects can retain
-#'   their estimates when inference fails. Each group involved in an effect needs at least two
-#'   respondents for inference. Covariance is attached as attribute `vcov`, in output row order;
-#'   rows/columns without valid inference are NA. Perfectly fitted subgroups have `invalid_variance`
-#'   for their AMCEs; a difference can retain inference when another group supplies positive variance.
-#'   No multiplicity adjustment is applied.
+#' @details CR1 is the cluster-robust covariance times `G/(G-1) * (n-1)/(n-k)`, where `G` is all
+#'   respondents in the joint fit, `n` is profile rows and `k` is the fitted rank.
+#'
+#' @return A data frame in supplied group, attribute and level order, with AMCE rows preceding
+#'   differences:
+#'   * Identifiers: `type` (`"amce"` or `"difference"`), `group` (a display label), `group_name` and
+#'     `reference_group` (identify the contrast without parsing `group`), `attribute`, `level`,
+#'     `reference_level`.
+#'   * Estimates and inference: `estimate`, `std.error`, `df`, `statistic`, `p.value`, `conf.low`,
+#'     `conf.high`, `vcov`, `inference`.
+#'   * Diagnostics: `n_clusters` (joint-fit respondent count, the same for every row),
+#'     `n_clusters_effect` (the involved group's respondent count for an AMCE, or the sum of both
+#'     groups' counts for a difference — not an effective degrees of freedom), `rank`, `status` and
+#'     `failure_reason`.
+#'
+#'   Non-estimable effects retain a row with NA estimates and inference; other estimable effects keep
+#'   their estimates even when this one's inference fails. Each group involved in an effect needs at
+#'   least two respondents for inference. Covariance is attached as attribute `vcov`, in output row
+#'   order; rows/columns without valid inference are NA. Perfectly fitted subgroups have
+#'   `invalid_variance` for their AMCEs; a difference can retain inference when the other group
+#'   supplies positive variance. No multiplicity adjustment is applied.
+#'
+#'   `failure_reason` (`status == "failed"`) is one of:
+#'   * `non_estimable`: the effect is aliased with the fitted design; inspect the design and data for
+#'     missing level combinations.
+#'   * `insufficient_clusters`: fewer than two respondents in a group the effect needs.
+#'   * `no_residual_df`: no residual degrees of freedom remain in the joint fit.
+#'   * `covariance_failure`: the covariance calculation raised an error, recorded in the
+#'     `"covariance_error"` attribute.
+#'   * `invalid_variance`: the estimated variance is non-finite or non-positive, typically from a
+#'     perfectly fitted subgroup.
+#'   * `invalid_df`: the inference method returned non-finite or non-positive degrees of freedom.
+#'
+#'   `run_error`, a whole-run sampling or fitting failure, is added by [power_sim()], not by this
+#'   function.
+#' @seealso [conjoint_design()], [simulate_experiment()], [power_sim()], [summarise_runs()]
 #' @export
 #' @md
 #' @examples
 #' design <- conjoint_design(c(2, 3))
+#' set.seed(1)
 #' data <- simulate_experiment(design, list(0.05, c(-0.05, 0.1)), units = 100, n_tasks = 3)
 #' estimate_amce(data, design)
 #' estimate_amce(data, design, inference = "t")
 #'
 #' # subgroup AMCEs and their differences from the first group
 #' amce_by_group <- list(A = list(0.05, c(-0.05, 0.1)), B = list(0.1, c(0, 0.1)))
+#' set.seed(1)
 #' grouped <- simulate_experiment(design, amce_by_group, units = c(A = 100, B = 80), n_tasks = 3,
 #'                                groups = c("A", "B"))
 #' estimate_amce(grouped, design, groups = c("A", "B"))

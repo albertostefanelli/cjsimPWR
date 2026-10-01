@@ -32,29 +32,37 @@ power_sim(
 \item{levels}{either a vector with the number of levels of each attribute, or a list with the level
 labels of each attribute. Names give the attribute names; unnamed attributes are called \code{var_1},
 \code{var_2}, and so on. Level counts give the labels \code{"0"}, \code{"1"}, and so on. The first level of each
-attribute is its reference level. Attributes keep the order given, and there is no limit on their
-number.}
+attribute is its reference level. Attributes keep the order given; the number of attributes is
+determined by \code{levels}.
+
+Every attribute needs at least two levels; level labels within an attribute must be distinct and
+non-missing. Attribute names must be unique, and none may be \code{"group"}, \code{"respondent"}, \code{"task"},
+\code{"profile"} or \code{"y"} — names reserved for columns \code{\link[=simulate_experiment]{simulate_experiment()}} adds.}
 
 \item{true_amce}{AMCEs of the non-reference levels: a list with one numeric vector per attribute, matched
 to the attributes by name when named and by position otherwise. With groups, either one such list for
 all groups or a list of them named by group. Named coefficient vectors are matched to the design's
 non-reference level labels; unnamed vectors follow the design's level order.}
 
-\item{units}{number of respondents: one number, or one per group (matched by name when named).}
+\item{units}{positive whole number of respondents: one number, repeated for every group, or one per
+group, matched by name when named and by group order otherwise.}
 
-\item{n_tasks}{number of tasks per respondent: one number, or one per group.}
+\item{n_tasks}{positive whole number of tasks per respondent: one number, repeated for every group, or
+one per group, matched by name when named and by group order otherwise.}
 
 \item{groups}{NULL, or group names in the desired order. Report each group's AMCEs and differences
 between each subsequent group and the first group. Named sample sizes and effects are matched
 by name, retaining this order. A single group has AMCEs without differences.}
 
-\item{sigma}{heterogeneity of preferences: the standard deviation, across respondents, of each
-respondent's own AMCE, on the probability scale (\code{sigma = 0.05} means individual AMCEs spread
-with SD 0.05 around the requested AMCE). Available for the logit model; the linear model requires
-\code{sigma = 0}. A requested zero AMCE stays zero in the population; individual respondents can still
-have positive or negative effects under heterogeneity.
-There is no generally valid value: use pilot evidence where available, otherwise compare labelled
-scenarios such as \code{sigma = c(0, 0.05, 0.10, 0.15)} with the requested AMCEs held fixed.}
+\item{sigma}{heterogeneity of preferences: a single non-negative number, the standard deviation,
+across respondents, of each respondent's own AMCE, on the probability scale (\code{sigma = 0.05} means
+individual AMCEs spread with SD 0.05 around the requested AMCE). One call takes one \code{sigma}, shared
+across effects and groups; it does not accept a vector. Available for the logit model; the linear
+model requires \code{sigma = 0}. A requested zero AMCE stays zero in the population; individual
+respondents can still have positive or negative effects under heterogeneity.
+There is no generally valid value: use pilot evidence where available, otherwise compare separate
+calls at labelled candidate values (for example, 0, 0.05, 0.10 and 0.15) with the requested AMCEs
+held fixed.}
 
 \item{dgp}{choice model: \code{"logit"} (default), calibrated so that generated AMCEs match \code{true_amce}
 within the calibration tolerance;
@@ -64,18 +72,18 @@ than AMCEs.}
 
 \item{alpha}{Significance level for two-sided confidence intervals and tests of zero.}
 
-\item{vcov}{\code{"CR1"} (default) or \code{"CR2"}. CR1 is computed with
-\code{sandwich::vcovCL(type = "HC1", cadjust = TRUE)}: the cluster-robust covariance times
-G/(G-1) * (n-1)/(n-k), where G is all respondents in the joint fit, n is profile rows and k is the
-fitted rank (\code{clubSandwich}'s \code{"CR1S"}, and the estimator of \code{cjoint::amce()} and Stata's
-\code{vce(cluster)}). CR2 is the bias-reduced estimator of Bell and McCaffrey (2002) and requires the
-\code{clubSandwich} package.}
+\item{vcov}{\code{"CR1"} (default): \code{sandwich::vcovCL(type = "HC1", cadjust = TRUE)}, the estimator of
+\code{cjoint::amce(cluster = TRUE)} for the unweighted specification and of Stata's \code{vce(cluster)}
+(\code{clubSandwich}'s \code{"CR1S"}, distinct from its differently named \code{"CR1"}). \code{"CR2"}: the bias-reduced
+estimator of Bell and McCaffrey (2002), requiring the \code{clubSandwich} package. See Details for the
+full CR1 identity and the \href{https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/clustering.md}{clustering guide}
+(online) for choosing between them.}
 
-\item{sim_runs}{Positive number of experiments. Defaults to 1000.}
+\item{sim_runs}{Positive whole number of experiments. Defaults to 1000.}
 
-\item{seed}{Integer seed for the experiment streams. Required for reproducible runs.}
+\item{seed}{Required single integer seed for the experiment streams; there is no default.}
 
-\item{cores}{Positive number of workers, default 1. Values above 1 use base R PSOCK workers;
+\item{cores}{Positive whole number of workers, default 1. Values above 1 use base R PSOCK workers;
 at most \code{sim_runs} workers are started. No global future plan or options are changed.}
 
 \item{inference}{\code{"normal"}, \code{"t"} (G-1 df from the joint fit), or \code{"Satterthwaite"} (CR2 only).
@@ -86,21 +94,24 @@ small subgroups, even if the joint fit has many respondents.}
 coefficient scale. With \code{"odds"} it reproduces the old \code{sigma.u_k}. The implied AMCE SDs are
 reported in the model's \code{truth} table.}
 
-\item{calibration_control}{optional named list of calibration settings; see the "Calibration" section.
-\code{reference_margin = 0.5} enables experimental precision planning; its default of zero
-retains the original calibration and reference budgets.}
+\item{calibration_control}{optional named list of calibration settings; see the Calibration section
+of \code{\link[=simulate_experiment]{simulate_experiment()}} below. \code{reference_margin = 0.5} enables experimental precision planning;
+its default of zero retains the original calibration and reference budgets.}
 
 \item{keep_runs}{Retain the estimates, inference and failure reasons from every run? Default FALSE.}
 
-\item{n_levels, group_name, true_coef}{Deprecated named aliases for \code{levels}, \code{groups}, and
-\code{true_amce}. The default DGP is now calibrated logit; select \code{dgp = "odds"} explicitly to
-interpret \code{true_coef} as legacy score coefficients.}
+\item{n_levels, group_name, true_coef}{Deprecated aliases for \code{levels}, \code{groups}, and \code{true_amce},
+kept for backward compatibility with a warning on use. The default DGP is now calibrated logit;
+select \code{dgp = "odds"} explicitly to interpret \code{true_coef} as legacy score coefficients.}
 
 \item{sigma.u_k}{Deprecated alias. In versions up to 0.2.1 it was the SD of respondent-level
 effects on the probability scale, so with the calibrated models it is used as \code{sigma}. With
-\code{dgp = "odds"} it is used as \code{latent_sigma}, which reproduces the old behaviour exactly.}
+\code{dgp = "odds"} it is used as \code{latent_sigma}, reproducing only that legacy parameter's
+interpretation; profile pairs are always drawn independently now (see NEWS), so \code{dgp = "odds"}
+does not reproduce a 0.2.1 experiment's results exactly.}
 
-\item{n_attributes}{Deprecated attribute count, checked against \code{levels} when supplied.}
+\item{n_attributes}{Deprecated attribute count, checked against \code{levels} when supplied. See NEWS
+for the full migration table covering every deprecated argument.}
 }
 \value{
 A \code{cj_power} list with:
@@ -108,7 +119,10 @@ A \code{cj_power} list with:
 \item \code{performance}: one row per effect, including effect identifiers, requested and true AMCEs,
 covariance/inference methods, and all \code{\link[=summarise_runs]{summarise_runs()}} measures and counts.
 \item \code{truth}: effect identifiers and the model's input, requested AMCE, true AMCE, implied AMCE SD
-and reference precision, \code{null_status} and \code{target_error_bound}. \code{effect_id} links all result tables.
+and reference precision, and \code{target_error_bound}. Subgroup-difference rows have
+\code{amce_sd}, \code{sd_mcse} and \code{sd_half_width} equal to \code{NA}. \code{effect_id} links \code{truth}, \code{performance},
+\code{runs} and \code{failures}; it is not a column of \code{parameters}, \code{settings} or the prepared model's
+own truth table.
 \item \code{parameters}, \code{diagnostics}: calibrated latent parameters and per-group calibration diagnostics.
 \item \code{settings}: resolved design, sample sizes, DGP, inference, seeds, worker count and controls.
 \item \code{failures}: counts by effect, failure reason and error message; empty when no inference fails.
@@ -120,51 +134,66 @@ and reference precision, \code{null_status} and \code{target_error_bound}. \code
 Calibrates the choice model once, simulates independent experiments, and evaluates AMCEs and
 differences between groups using respondent-clustered inference.
 }
-\details{
-Each experiment has its own L'Ecuyer-CMRG stream, so results are identical across worker
-counts and the first runs remain unchanged when \code{sim_runs} increases. Calibration has its own
-seed argument in \code{calibration_control}. Equal seed values can overlap calibration and experiment
-draws; the final reference uses a fresh substream. The caller's random-number state is restored after the call.
-If the caller uses Box-Muller normals, a temporary PSOCK process initializes each private seed
-to preserve that generator's cached normal draw, including when \code{cores = 1}.
+\section{Reproducibility}{
+ Each experiment has its own L'Ecuyer-CMRG stream, so results are identical
+across worker counts and the first runs remain unchanged when \code{sim_runs} increases. Calibration
+has its own seed argument in \code{calibration_control}. Equal seed values can overlap calibration and
+experiment draws; the final reference uses a fresh substream. The caller's random-number state,
+including its normal-generator kind, is restored after the call.
+}
 
-Bias and coverage use \code{true_amce}, the numerical reference for the generated population AMCE,
-with its uncertainty retained. Calibrated effects match \code{requested_amce} within \code{tolerance},
-rather than necessarily equalling it. Null classification uses \code{requested_amce == 0}, or
-\code{true_amce == 0} when the requested AMCE is unavailable (the deprecated odds model uses scores).
-\code{null_status} distinguishes \code{exact}, \code{calibrated} and \code{non-null} targets. A single-group requested
-zero is exact in the calibrated models. Differences are exact for shared populations, the linear
-model or levels that are zero in both groups. Separately calibrated groups with equal nonzero
-requests generally produce a small residual contrast: their Type I error is approximate.
+\section{Interpreting results}{
+ Bias and coverage use \code{true_amce}, the numerical reference for the
+generated population AMCE, with its uncertainty retained. Calibrated effects match
+\code{requested_amce} within \code{tolerance}, rather than necessarily equalling it. Null classification
+uses \code{requested_amce == 0}, or \code{true_amce == 0} when the requested AMCE is unavailable (the
+deprecated odds model uses scores). A single-group requested zero is exact in the calibrated
+models. Differences are exact for shared populations, the linear model or levels that are zero
+in both groups.
+Separately calibrated groups with equal nonzero requests generally produce a small residual
+contrast: their Type I error is approximate.
 \code{target_error_bound = abs(true_amce - requested_amce) + reference_half_width} is a nominal 99\%
 simultaneous reference confidence bound, not a deterministic guarantee; it is NA for odds inputs.
 Type I error is printed with its Monte Carlo standard error only for null targets, not
 for nonsignificant estimates of nonzero effects. The column is omitted when no Type I error
 estimates are available. To check an effect's false-positive rate, rerun with that effect set
-to zero and the remaining design settings unchanged.
+to zero and the remaining design settings unchanged. See \code{\link[=summarise_runs]{summarise_runs()}} for the full
+definition of each returned measure.
 
 An independent final reference, with a fixed budget chosen after calibration acceptance,
 avoids selecting the reference estimate by the acceptance rule. Its MCSE is propagated into
 \code{bias_mcse}; coverage MCSE remains conditional on the reference, with sensitivity bounds supplied
 by \code{\link[=summarise_runs]{summarise_runs()}}. Increasing \code{sim_runs} does not reduce reference uncertainty.
 Optional \code{calibration_control = list(reference_margin = 0.5)} reserves calibration headroom and
-plans a capped final reference budget; see \code{\link[=simulate_experiment]{simulate_experiment()}} for rules and diagnostics.
-This experimental option reduces inconclusive checks without guaranteeing confirmation.
-For calibrated nulls, \code{null_size_sensitivity} is the excess rejection probability in an unbiased,
-known-SE normal test at the target error bound, using \code{emp_se} as the SE. A warning appears when
-this exceeds \code{0.1 * sqrt(alpha * (1 - alpha) / n_valid)}. This threshold is a diagnostic choice;
-it is not a bound on size distortion for clustered, biased or non-normal estimates. Tighten
-\code{calibration_control} if the approximation is material. Exact nulls have sensitivity zero;
-non-null targets and unavailable reference bounds or empirical SEs have NA.
+plans a capped final reference budget; see the Calibration section of \code{\link[=simulate_experiment]{simulate_experiment()}} for
+rules and diagnostics. This experimental option reduces inconclusive checks without guaranteeing
+confirmation.
 
-All measures condition on successful inference for that effect, using the effect's degrees of
-freedom in each run. Failed runs are counted, never treated as nonsignificant. Sampling or fit
-errors retain all effects with reason \code{run_error} and an error message. Invalid specifications,
-unavailable CR2 dependencies, calibration failures and worker startup errors stop the call.
-
-Backward compatibility covers named arguments; migrate old positional calls to named arguments.
-The return value is now a list with a numeric performance table rather than formatted strings.
+For approximate nulls, an internal check evaluates the excess rejection probability in an unbiased,
+known-SE normal test at the target error bound: \code{pnorm(-z - h) + pnorm(h - z) - alpha}, where
+\code{z = qnorm(1 - alpha / 2)} and \code{h = target_error_bound / emp_se}. A warning appears when this
+exceeds \code{0.1 * sqrt(alpha * (1 - alpha) / n_valid)}. The threshold is a diagnostic choice, not a
+bound on size distortion for clustered, biased or non-normal estimates. Tighten
+\code{calibration_control} if the approximation is material. Exact nulls and non-null targets are skipped;
+the check is unavailable when the bound or \code{emp_se} is non-finite, or \code{emp_se} is non-positive.
+No diagnostic column is returned, and standalone \code{\link[=summarise_runs]{summarise_runs()}} calls do not emit this warning.
 }
+
+\section{Failures}{
+ All measures condition on successful inference for that effect, using the
+effect's degrees of freedom in each run. Failed runs are counted in \verb{$failures} and \code{n_failed},
+never treated as nonsignificant. Sampling or fit errors retain all effects with reason \code{run_error}
+and an error message; other row-level failure reasons are defined in \code{\link[=estimate_amce]{estimate_amce()}}. Invalid
+specifications, unavailable CR2 dependencies, calibration failures and worker startup errors stop
+the call instead of producing a row.
+}
+
+\section{Compatibility}{
+ Deprecated arguments and positional calls still work with a warning; migrate
+to the current named arguments (see NEWS for the full mapping). The return value is a list with a
+numeric performance table rather than formatted strings.
+}
+
 \examples{
 # 20 runs keep the example fast; use the default 1000 (or more) for a real power analysis
 # Include a zero AMCE to report Type I error alongside power

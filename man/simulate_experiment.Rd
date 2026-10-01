@@ -25,19 +25,23 @@ to the attributes by name when named and by position otherwise. With groups, eit
 all groups or a list of them named by group. Named coefficient vectors are matched to the design's
 non-reference level labels; unnamed vectors follow the design's level order.}
 
-\item{units}{number of respondents: one number, or one per group (matched by name when named).}
+\item{units}{positive whole number of respondents: one number, repeated for every group, or one per
+group, matched by name when named and by group order otherwise.}
 
-\item{n_tasks}{number of tasks per respondent: one number, or one per group.}
+\item{n_tasks}{positive whole number of tasks per respondent: one number, repeated for every group, or
+one per group, matched by name when named and by group order otherwise.}
 
 \item{groups}{\code{NULL}, or the names of the respondent groups.}
 
-\item{sigma}{heterogeneity of preferences: the standard deviation, across respondents, of each
-respondent's own AMCE, on the probability scale (\code{sigma = 0.05} means individual AMCEs spread
-with SD 0.05 around the requested AMCE). Available for the logit model; the linear model requires
-\code{sigma = 0}. A requested zero AMCE stays zero in the population; individual respondents can still
-have positive or negative effects under heterogeneity.
-There is no generally valid value: use pilot evidence where available, otherwise compare labelled
-scenarios such as \code{sigma = c(0, 0.05, 0.10, 0.15)} with the requested AMCEs held fixed.}
+\item{sigma}{heterogeneity of preferences: a single non-negative number, the standard deviation,
+across respondents, of each respondent's own AMCE, on the probability scale (\code{sigma = 0.05} means
+individual AMCEs spread with SD 0.05 around the requested AMCE). One call takes one \code{sigma}, shared
+across effects and groups; it does not accept a vector. Available for the logit model; the linear
+model requires \code{sigma = 0}. A requested zero AMCE stays zero in the population; individual
+respondents can still have positive or negative effects under heterogeneity.
+There is no generally valid value: use pilot evidence where available, otherwise compare separate
+calls at labelled candidate values (for example, 0, 0.05, 0.10 and 0.15) with the requested AMCEs
+held fixed.}
 
 \item{dgp}{choice model: \code{"logit"} (default), calibrated so that generated AMCEs match \code{true_amce}
 within the calibration tolerance;
@@ -53,16 +57,28 @@ reported in the model's \code{truth} table.}
 \code{\link[=power_sim]{power_sim()}}'s \code{model}, for repeated experiments without recalibration.
 Supply the same design and omit true_amce, sigma, dgp, latent_sigma and calibration_control.}
 
-\item{calibration_control}{optional named list of calibration settings; see the "Calibration" section.
-\code{reference_margin = 0.5} enables experimental precision planning; its default of zero
-retains the original calibration and reference budgets.}
+\item{calibration_control}{optional named list of calibration settings; see the Calibration section
+of \code{\link[=simulate_experiment]{simulate_experiment()}} below. \code{reference_margin = 0.5} enables experimental precision planning;
+its default of zero retains the original calibration and reference budgets.}
 }
 \value{
 A data frame with one row per profile and columns \code{group} (\code{NA} without groups), \code{respondent}
 (unique across groups), \code{task}, \code{profile} (1 or 2), \code{y} (1 if the profile was chosen) and one factor
-per attribute, named as in the design. Attribute \code{dgp} contains the prepared model, including
-the true AMCEs, calibrated parameters and calibration diagnostics.
-Calibration/reference calculations preserve the caller's RNG; sampling the experiment advances it.
+per attribute, named as in the design. Attribute \code{dgp} contains the prepared model (class \code{cj_dgp}),
+including:
+\itemize{
+\item \code{truth}: one row per effect, with \code{attribute}, \code{level} (and \code{group}/\code{reference_group} with groups),
+\code{requested_amce}, \code{true_amce} (the numerical reference), \code{reference_mcse}, \code{reference_half_width},
+\code{amce_sd} (implied SD under heterogeneity), \code{sd_mcse} and \code{sd_half_width}. Subgroup-difference rows
+have \code{amce_sd}, \code{sd_mcse} and \code{sd_half_width} equal to \code{NA}. This table has no \code{effect_id} column;
+that identifier is added by \code{\link[=power_sim]{power_sim()}}.
+\item \code{parameters}, \code{diagnostics}: calibrated latent parameters and the per-group calibration diagnostics
+described above.
+\item \code{control}: the resolved \code{calibration_control} settings, including defaults.
+}
+
+Calibration and reference calculations preserve the caller's RNG exactly; only sampling the
+experiment itself (the returned profile rows) advances it.
 }
 \description{
 Draws the tasks of a paired conjoint experiment and simulates each respondent's choices.
@@ -70,54 +86,72 @@ Draws the tasks of a paired conjoint experiment and simulates each respondent's 
 \section{Calibration}{
  For the logit model the package solves for coefficients whose AMCEs approximate
 \code{true_amce} (and, with \code{sigma > 0}, whose respondent-level AMCEs have SD \code{sigma}), then verifies the
-result with fresh reference draws. Verification stops when every true AMCE is within \code{tolerance}
-(default 0.001) of its request, with 99\% Monte Carlo confidence, and every AMCE SD within
-\code{min(0.005, 0.05 * sigma)}; otherwise the calibration stops with an error. Designs with at most
-\code{exact_max_pairs} (default 10,000) profile pairs are enumerated exactly; larger designs are
-integrated by Monte Carlo. With \code{sigma > 0}, calibration takes seconds for small designs but can
-take many minutes when profiles must be sampled. The
-remaining settings (\code{seed}, \code{maxit}, \code{solver_tol}, \code{calibration_pairs}, \code{calibration_draws},
-\code{verification_pairs}, \code{verification_draws}, \code{verification_batches}, \code{max_verification_batches},
-\code{max_attempts}) control the solver and the size of the reference draws; their defaults are listed
-in \code{attr(data, "dgp")$control}. Calibration uses its own random seed and leaves the caller's random
-numbers unchanged.
-After acceptance, a fresh reference uses the accepted verification's integration settings and,
-by default, its number of batches. It is never retried or used to recalibrate. \code{diagnostics[[g]]$verification}
-records acceptance; \verb{$reference} records the final estimate used in \code{truth}. A recheck that
-overlaps a tolerance boundary is quietly retained with \code{accepted = FALSE}. A warning is issued
-only when an interval lies wholly outside its target's tolerance band: \code{abs(estimate - target)}
-minus its half-width exceeds the tolerance. Then \code{contradicted = TRUE}; the model and reference
-are retained. Exact integration needs no fresh draws. Separately calibrated group contrasts match their requests within \code{tolerance}
-by verifying each group's AMCE within half that tolerance; they are not forced to zero.
+solution against fresh reference draws at a nominal 99\% Monte Carlo confidence. Verification stops
+when every true AMCE is within \code{tolerance} of its request and every AMCE SD is within
+\code{min(0.005, 0.05 * sigma)}; otherwise calibration stops with an error. Exact enumeration concerns
+profile combinations: designs with at most \code{exact_max_pairs} profile pairs are enumerated exactly,
+while larger designs integrate over sampled profiles. With heterogeneity, integration over
+respondent coefficients uses Monte Carlo draws even when profile pairs are enumerated exactly.
+Calibration uses its own random seed
+(\code{calibration_control$seed}) and leaves the caller's random numbers unchanged.
 
-Experimental precision planning is enabled with \code{reference_margin = m}, where \verb{0 < m < 1}
-(suggested starting value 0.5; default 0 disables it). Verification then requires each estimated
-gap plus its margin to be at most \code{(1 - m)} times its AMCE or SD tolerance. The final reference
-retains the original tolerances. Before its draws, verification batch variances, inflated by a
-factor of two, determine the smallest batch count predicting half-widths at most \code{m * tolerance / 2}
-for every targeted quantity. Integration settings per batch stay fixed. The minimum batch count
-is \code{verification_batches}; \code{max_reference_batches} (default 512) caps the final count per group.
-\code{diagnostics[[g]]$reference_plan} records \code{batches}, \code{cap_limited}, \code{predicted_precision_met},
-realised \code{precision_met}, and a \code{quantities} table with targets, predictions and actual half-widths.
-A cap or missed width target is diagnostic, not itself a warning or a reason to redraw. The
-inflation is a planning allowance, not a variance confidence bound; confirmation is not guaranteed.
-Stricter verification can take longer or exhaust its budget. Exact references need zero batches.
-This option requires AMCE targets and is unavailable for the legacy odds model.
+After acceptance, a fresh, independent reference — never retried or used to recalibrate — supplies
+the true AMCEs, SDs and their Monte Carlo precision in \code{truth}. \code{diagnostics[[g]]$verification}
+records acceptance; \code{diagnostics[[g]]$reference} records this final estimate. Three outcomes follow:
+a recheck fully inside its tolerance band is accepted; one that overlaps the boundary is retained
+quietly with \code{accepted = FALSE} (inconclusive); one that lies wholly outside its band
+(\code{abs(estimate - target) - half-width > tolerance}) is retained with \code{contradicted = TRUE} and a
+warning. Separately calibrated group contrasts match their requests within \code{tolerance} by verifying
+each group's AMCE within half that tolerance; they are not forced to zero.
 
-The deprecated odds model has fixed scores rather than AMCE/SD targets. On each precision retry,
-it doubles \code{verification_pairs} and \code{verification_draws}, up to \code{max_attempts}, without changing
-the tolerance or drawing unused training samples. Exhausting this budget stops with a reference
-precision error. Its final \code{accepted} flag records precision only; \code{contradicted} is FALSE because
-there are no AMCE/SD targets to test. The separate null-sensitivity warning in \code{\link[=power_sim]{power_sim()}} is unchanged.
+\strong{Controls.} \code{calibration_control} accepts these named settings (defaults from \code{dgp_controls()},
+also listed in \code{attr(data, "dgp")$control}):\tabular{lrl}{
+   Setting \tab Default \tab Role \cr
+   \code{seed} \tab 104729 \tab Solver: calibration's own random seed, independent of the caller's RNG. \cr
+   \code{maxit} \tab 100 \tab Solver: maximum solver iterations. \cr
+   \code{solver_tol} \tab 1e-6 \tab Solver: solver convergence tolerance. \cr
+   \code{tolerance} \tab 0.001 \tab Solver: verification tolerance for AMCE and SD targets. \cr
+   \code{exact_max_pairs} \tab 10000 \tab Integration: profile-pair count below which integration is exact. \cr
+   \code{calibration_pairs} \tab 16384 \tab Integration: sampled profile pairs per solver iteration (when not exact). \cr
+   \code{calibration_draws} \tab 2048 \tab Integration: respondent draws per profile pair while solving. \cr
+   \code{verification_pairs} \tab 32768 \tab Integration: profile pairs sampled per verification batch. \cr
+   \code{verification_draws} \tab 1024 \tab Integration: respondent draws per profile pair per batch. \cr
+   \code{verification_batches} \tab 16 \tab Integration: batches per verification attempt; also the minimum reference batch count. \cr
+   \code{max_verification_batches} \tab 128 \tab Integration: batch cap for one verification attempt. \cr
+   \code{max_attempts} \tab 4 \tab Integration: verification attempts allowed before calibration stops with an error. \cr
+   \code{reference_margin} \tab 0 \tab Precision planning: see below. \cr
+   \code{max_reference_batches} \tab 512 \tab Precision planning: cap on the final reference's batch count per group. \cr
+}
+
+
+\strong{Precision planning (experimental).} \code{reference_margin} (\verb{0 <= reference_margin < 1}) reserves
+verification headroom and plans the final reference's batch count from the verification variances.
+The default of 0 disables the option and retains the original calibration and reference budgets; a
+positive value (suggested starting point 0.5) can increase calibration runtime or cause stricter
+verification to fail. \code{max_reference_batches} caps the final budget per group.
+\code{diagnostics[[g]]$reference_plan} reports \code{batches}, \code{cap_limited}, \code{predicted_precision_met} and
+realised \code{precision_met}. A batch cap or a missed precision target alone does not raise a warning,
+and meeting the target is not guaranteed. This option requires AMCE targets and is unavailable for
+the legacy odds model; see the \href{https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/calibration.md}{calibration guide}
+(online) for the full derivation and reading guide.
+
+The deprecated odds model has fixed scores rather than AMCE/SD targets, so verification checks
+numerical precision only: each retry doubles \code{verification_pairs} and \code{verification_draws}, up to
+\code{max_attempts}, without changing the tolerance. Exhausting this budget stops with a reference
+precision error. Its final \code{accepted} flag records precision only; \code{contradicted} is always FALSE,
+since there are no AMCE/SD targets to test. The separate null-sensitivity warning in \code{\link[=power_sim]{power_sim()}}
+is unchanged.
 }
 
 \examples{
 design <- conjoint_design(c(2, 3))
+set.seed(1)
 data <- simulate_experiment(design, list(0.05, c(-0.05, 0.1)), units = 100, n_tasks = 3)
 head(data)
 attr(data, "dgp")$truth
 
 # heterogeneous preferences: individual AMCEs have SD 0.05 around the requested values
+set.seed(1)
 mixed <- simulate_experiment(design, list(0.05, c(-0.05, 0.1)), units = 100, n_tasks = 3,
                              sigma = 0.05)
 attr(mixed, "dgp")$truth[, c("attribute", "level", "true_amce", "amce_sd")]

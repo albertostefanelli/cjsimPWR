@@ -26,12 +26,12 @@ If NULL, use the group factor's levels, or first appearance for character groups
 entirely NA group column means no subgroups. Supply this argument to fix character-group order
 independently of row order. A single group produces AMCEs and no differences.}
 
-\item{vcov}{\code{"CR1"} (default) or \code{"CR2"}. CR1 is computed with
-\code{sandwich::vcovCL(type = "HC1", cadjust = TRUE)}: the cluster-robust covariance times
-G/(G-1) * (n-1)/(n-k), where G is all respondents in the joint fit, n is profile rows and k is the
-fitted rank (\code{clubSandwich}'s \code{"CR1S"}, and the estimator of \code{cjoint::amce()} and Stata's
-\code{vce(cluster)}). CR2 is the bias-reduced estimator of Bell and McCaffrey (2002) and requires the
-\code{clubSandwich} package.}
+\item{vcov}{\code{"CR1"} (default): \code{sandwich::vcovCL(type = "HC1", cadjust = TRUE)}, the estimator of
+\code{cjoint::amce(cluster = TRUE)} for the unweighted specification and of Stata's \code{vce(cluster)}
+(\code{clubSandwich}'s \code{"CR1S"}, distinct from its differently named \code{"CR1"}). \code{"CR2"}: the bias-reduced
+estimator of Bell and McCaffrey (2002), requiring the \code{clubSandwich} package. See Details for the
+full CR1 identity and the \href{https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/clustering.md}{clustering guide}
+(online) for choosing between them.}
 
 \item{inference}{\code{"normal"}, \code{"t"} (G-1 df from the joint fit), or \code{"Satterthwaite"} (CR2 only).
 NULL chooses normal for CR1 and Satterthwaite for CR2. The G-1 approximation can be poor for
@@ -40,30 +40,65 @@ small subgroups, even if the joint fit has many respondents.}
 \item{alpha}{Significance level for two-sided confidence intervals and tests of zero.}
 }
 \value{
-A data frame in supplied group, attribute and level order. AMCE rows precede differences.
-\code{group} is a display label; \code{group_name} and \code{reference_group} identify the contrast without
-parsing labels. Other columns include \code{type}, \code{attribute}, \code{level}, \code{reference_level},
-\code{estimate}, \code{std.error}, \code{df}, \code{statistic}, \code{p.value}, \code{conf.low}, \code{conf.high}, \code{vcov},
-\code{inference}, \code{n_clusters}, \code{n_clusters_effect}, \code{rank}, \code{status} and \code{failure_reason}.
-Non-estimable effects retain a row with NA estimates/inference; estimable effects can retain
-their estimates when inference fails. Each group involved in an effect needs at least two
-respondents for inference. Covariance is attached as attribute \code{vcov}, in output row order;
-rows/columns without valid inference are NA. Perfectly fitted subgroups have \code{invalid_variance}
-for their AMCEs; a difference can retain inference when another group supplies positive variance.
-No multiplicity adjustment is applied.
+A data frame in supplied group, attribute and level order, with AMCE rows preceding
+differences:
+\itemize{
+\item Identifiers: \code{type} (\code{"amce"} or \code{"difference"}), \code{group} (a display label), \code{group_name} and
+\code{reference_group} (identify the contrast without parsing \code{group}), \code{attribute}, \code{level},
+\code{reference_level}.
+\item Estimates and inference: \code{estimate}, \code{std.error}, \code{df}, \code{statistic}, \code{p.value}, \code{conf.low},
+\code{conf.high}, \code{vcov}, \code{inference}.
+\item Diagnostics: \code{n_clusters} (joint-fit respondent count, the same for every row),
+\code{n_clusters_effect} (the involved group's respondent count for an AMCE, or the sum of both
+groups' counts for a difference — not an effective degrees of freedom), \code{rank}, \code{status} and
+\code{failure_reason}.
+}
+
+Non-estimable effects retain a row with NA estimates and inference; other estimable effects keep
+their estimates even when this one's inference fails. Each group involved in an effect needs at
+least two respondents for inference. Covariance is attached as attribute \code{vcov}, in output row
+order; rows/columns without valid inference are NA. Perfectly fitted subgroups have
+\code{invalid_variance} for their AMCEs; a difference can retain inference when the other group
+supplies positive variance. No multiplicity adjustment is applied.
+
+\code{failure_reason} (\code{status == "failed"}) is one of:
+\itemize{
+\item \code{non_estimable}: the effect is aliased with the fitted design; inspect the design and data for
+missing level combinations.
+\item \code{insufficient_clusters}: fewer than two respondents in a group the effect needs.
+\item \code{no_residual_df}: no residual degrees of freedom remain in the joint fit.
+\item \code{covariance_failure}: the covariance calculation raised an error, recorded in the
+\code{"covariance_error"} attribute.
+\item \code{invalid_variance}: the estimated variance is non-finite or non-positive, typically from a
+perfectly fitted subgroup.
+\item \code{invalid_df}: the inference method returned non-finite or non-positive degrees of freedom.
+}
+
+\code{run_error}, a whole-run sampling or fitting failure, is added by \code{\link[=power_sim]{power_sim()}}, not by this
+function.
 }
 \description{
-Estimate AMCEs and differences between subgroup AMCEs
+Fits a single joint least-squares model on profile rows, with respondent-clustered standard errors,
+and reports each group's AMCEs together with subsequent-group-minus-first-group contrasts.
+}
+\details{
+CR1 is the cluster-robust covariance times \code{G/(G-1) * (n-1)/(n-k)}, where \code{G} is all
+respondents in the joint fit, \code{n} is profile rows and \code{k} is the fitted rank.
 }
 \examples{
 design <- conjoint_design(c(2, 3))
+set.seed(1)
 data <- simulate_experiment(design, list(0.05, c(-0.05, 0.1)), units = 100, n_tasks = 3)
 estimate_amce(data, design)
 estimate_amce(data, design, inference = "t")
 
 # subgroup AMCEs and their differences from the first group
 amce_by_group <- list(A = list(0.05, c(-0.05, 0.1)), B = list(0.1, c(0, 0.1)))
+set.seed(1)
 grouped <- simulate_experiment(design, amce_by_group, units = c(A = 100, B = 80), n_tasks = 3,
                                groups = c("A", "B"))
 estimate_amce(grouped, design, groups = c("A", "B"))
+}
+\seealso{
+\code{\link[=conjoint_design]{conjoint_design()}}, \code{\link[=simulate_experiment]{simulate_experiment()}}, \code{\link[=power_sim]{power_sim()}}, \code{\link[=summarise_runs]{summarise_runs()}}
 }

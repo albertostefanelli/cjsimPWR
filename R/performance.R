@@ -23,54 +23,89 @@
 #'   per-run degrees of freedom are counted in `n_failed` and left out of every measure. Measures are
 #'   conditional on the `n_valid` runs with valid inference; `n_runs` counts all attempted runs.
 #'
-#'   * `power` (when `null` is FALSE) or `type_1_error` (when TRUE): share of significant runs.
-#'   * `type_s`: share of significant runs whose estimate has the opposite sign to `truth`.
+#' @return A one-row data frame of class `cj_performance` with:
+#'
+#'   **Rejection**, denominator `n_valid`:
+#'   * `power` (when `null` is FALSE) or `type_1_error` (when TRUE): share of significant runs. Exactly
+#'     one of the two is non-`NA`. `power_mcse`/`type_1_error_mcse`: binomial Monte Carlo SE,
+#'     `sqrt(p * (1 - p) / n_valid)`.
+#'
+#'   **Sign and magnitude** (Gelman and Carlin 2014), denominator `n_sig`, the significant runs among
+#'   `n_valid`; `NA` when `null` is TRUE, `truth` is zero, or `n_sig` is zero:
+#'   * `type_s`: share of significant runs whose estimate has the opposite sign to `truth`. `type_s_mcse`:
+#'     the same binomial formula, on `n_sig`.
 #'   * `type_m`: exaggeration ratio, the mean of `|estimate| / |truth|` over significant runs.
+#'     `type_m_mcse`: `sd(ratio) / sqrt(n_sig)`, `NA` when `n_sig < 2`.
+#'
+#'   **Bias and standard errors**, denominator `n_valid` (`n` below):
+#'   * `mean_estimate`: `mean(estimate)` over valid runs.
+#'   * `bias`: `mean_estimate - truth`.
+#'   * `emp_se`: `sd(estimate)` over valid runs; `NA` when `n < 2`.
+#'   * `model_se`: the root mean square of the reported standard errors, `sqrt(mean(std.error^2))`,
+#'     over valid runs.
+#'   * `bias_mcse = sqrt(emp_se^2 / n + reference_mcse^2)`. The reference error is shared across
+#'     experiments and does not disappear with more runs; this formula assumes an independent reference.
+#'   * `emp_se_mcse`: the standard large-sample approximation `emp_se / sqrt(2 * (n - 1))`, `NA` when
+#'     `n < 2`.
+#'   * `model_se_mcse`: the analogous approximation for the root-mean-square SE,
+#'     `sqrt(var(std.error^2) / (4 * n * model_se^2))`, `NA` when `n < 2`.
+#'
+#'   **Coverage and reference sensitivity**, denominator `n_valid`, remaining conditional on the
+#'   supplied reference:
 #'   * `coverage`: share of runs whose confidence interval, `estimate` plus or minus the critical value
-#'     times `std.error`, contains `truth`.
+#'     times `std.error`, contains `truth`. `coverage_mcse`: the binomial formula on `n_valid`.
+#'   * `coverage_reference_lower`, `coverage_reference_upper`: bounds on coverage over candidate
+#'     references within `reference_half_width` of `truth` — not confidence intervals for coverage.
+#'     `_lower` counts intervals containing the entire reference interval; `_upper` counts intervals
+#'     intersecting it. Increase reference precision if the two differ materially.
 #'
-#'   Type S and Type M follow Gelman and Carlin (2014) and are `NA` when `null` is TRUE, `truth` is zero or no run is
-#'   significant. Monte Carlo standard errors (`_mcse` columns) follow Morris, White and Crowther (2019).
+#'   **Analytic diagnostics** (Lu, Qiu and Deng 2019), `NA` for null targets: `analytic_power`,
+#'   `analytic_type_s`, `analytic_type_m`. A known-SE normal approximation using `truth` and the
+#'   *empirical* SD `emp_se` — not `model_se` — even when significance above used t inference. This is
+#'   a rough check at low power, and is not the calculation used by cjpowR or other closed-form tools;
+#'   see the [closed-form comparison](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/closed_form.md)
+#'   (online).
+#'
+#'   **Counts:** `n_sig`, `n_runs` (all attempted runs), `n_valid`, `n_failed`.
+#'
 #'   The default printout includes Type I error only for null targets, never because an estimate is
-#'   nonsignificant. For approximate nulls this is rejection under the generated, near-zero contrast.
-#'   `bias_mcse = sqrt(emp_se^2 / n_valid + reference_mcse^2)`. The reference error is shared across
-#'   experiments and does not disappear with more runs. This formula assumes an independent reference.
-#'   `coverage_mcse` and Type S/M MCSEs remain conditional on that reference. The conservative sensitivity
-#'   bounds `coverage_reference_lower` and `coverage_reference_upper` count intervals containing the
-#'   entire reference interval and intervals intersecting it, respectively. They are not confidence
-#'   intervals for coverage; increase reference precision if they differ materially.
-#'   The `analytic_` columns give the normal-theory values for `truth` and the empirical standard error of
-#'   the estimates (Lu, Qiu and Deng 2019). They assume a known standard error, so at low power they are
-#'   only a rough check. Analytic power and Type S/M are `NA` for null targets.
-#'
-#' @return A one-row data frame of class `cj_performance` with columns `power`, `power_mcse`,
-#'   `type_1_error`, `type_1_error_mcse`, `type_s`, `type_s_mcse`, `type_m`, `type_m_mcse`, `coverage`,
-#'   `coverage_mcse`, `coverage_reference_lower`, `coverage_reference_upper`, `mean_estimate`,
-#'   `bias`, `bias_mcse`, `emp_se`, `emp_se_mcse`, `model_se`,
-#'   `model_se_mcse`, `analytic_power`, `analytic_type_s`, `analytic_type_m`, `n_sig`, `n_runs`, `n_valid` and
-#'   `n_failed`.
+#'   nonsignificant; for approximate nulls this is rejection under the generated, near-zero contrast.
+#'   Monte Carlo standard errors (`_mcse` columns) follow Morris, White and Crowther (2019).
+#'   `power_sim()` also checks approximate nulls for sensitivity to calibration error; see its help
+#'   for the warning threshold and assumptions. A standalone `summarise_runs()` call emits no such
+#'   warning, since it constructs no target error bound.
 #'
 #' @references
 #' Gelman, A., & Carlin, J. (2014). Beyond power calculations: Assessing Type S (sign) and Type M
-#' (magnitude) errors. *Perspectives on Psychological Science*, 9(6), 641-651.
+#' (magnitude) errors. *Perspectives on Psychological Science*, 9(6), 641-651. \doi{10.1177/1745691614551642}
 #'
 #' Lu, J., Qiu, Y., & Deng, A. (2019). A note on Type S/M errors in hypothesis testing. *British Journal of
-#' Mathematical and Statistical Psychology*, 72(1), 1-17.
+#' Mathematical and Statistical Psychology*, 72(1), 1-17. \doi{10.1111/bmsp.12132}
 #'
 #' Morris, T. P., White, I. R., & Crowther, M. J. (2019). Using simulation studies to evaluate statistical
-#' methods. *Statistics in Medicine*, 38(11), 2074-2102.
+#' methods. *Statistics in Medicine*, 38(11), 2074-2102. \doi{10.1002/sim.8086}
 #'
+#' @seealso [power_sim()], [estimate_amce()]
 #' @export
 #' @md
 #'
 #' @examples
 #' # 1,000 estimates of an AMCE of 0.05 with a standard error of 0.05
+#' set.seed(1)
 #' estimates <- rnorm(1000, mean = 0.05, sd = 0.05)
 #' summarise_runs(estimates, std.error = rep(0.05, 1000), truth = 0.05)
 #'
 #' # Under a true null, the rejection rate is Type I error rather than power
+#' set.seed(1)
 #' null_estimates <- rnorm(1000, mean = 0, sd = 0.05)
 #' summarise_runs(null_estimates, std.error = rep(0.05, 1000), truth = 0)
+#'
+#' # An approximate (calibrated) null: truth is illustrative, an independent reference near
+#' # but not exactly zero, as power_sim() would supply from a calibrated model's verification
+#' set.seed(1)
+#' approx_estimates <- rnorm(1000, mean = 0.0003, sd = 0.05)
+#' summarise_runs(approx_estimates, std.error = rep(0.05, 1000), truth = 0.0003, null = TRUE,
+#'                reference_mcse = 0.0001, reference_half_width = 0.0003)
 
 summarise_runs <- function(estimate, std.error, truth, alpha = 0.05, df = Inf,
                            null = truth == 0, reference_mcse = 0, reference_half_width = 0) {

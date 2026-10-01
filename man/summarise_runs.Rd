@@ -38,12 +38,65 @@ of \code{truth}, default 0. Its variance is added to \code{bias_mcse} squared, w
 default 0. Used for coverage sensitivity bounds; see Details.}
 }
 \value{
-A one-row data frame of class \code{cj_performance} with columns \code{power}, \code{power_mcse},
-\code{type_1_error}, \code{type_1_error_mcse}, \code{type_s}, \code{type_s_mcse}, \code{type_m}, \code{type_m_mcse}, \code{coverage},
-\code{coverage_mcse}, \code{coverage_reference_lower}, \code{coverage_reference_upper}, \code{mean_estimate},
-\code{bias}, \code{bias_mcse}, \code{emp_se}, \code{emp_se_mcse}, \code{model_se},
-\code{model_se_mcse}, \code{analytic_power}, \code{analytic_type_s}, \code{analytic_type_m}, \code{n_sig}, \code{n_runs}, \code{n_valid} and
-\code{n_failed}.
+A one-row data frame of class \code{cj_performance} with:
+
+\strong{Rejection}, denominator \code{n_valid}:
+\itemize{
+\item \code{power} (when \code{null} is FALSE) or \code{type_1_error} (when TRUE): share of significant runs. Exactly
+one of the two is non-\code{NA}. \code{power_mcse}/\code{type_1_error_mcse}: binomial Monte Carlo SE,
+\code{sqrt(p * (1 - p) / n_valid)}.
+}
+
+\strong{Sign and magnitude} (Gelman and Carlin 2014), denominator \code{n_sig}, the significant runs among
+\code{n_valid}; \code{NA} when \code{null} is TRUE, \code{truth} is zero, or \code{n_sig} is zero:
+\itemize{
+\item \code{type_s}: share of significant runs whose estimate has the opposite sign to \code{truth}. \code{type_s_mcse}:
+the same binomial formula, on \code{n_sig}.
+\item \code{type_m}: exaggeration ratio, the mean of \verb{|estimate| / |truth|} over significant runs.
+\code{type_m_mcse}: \code{sd(ratio) / sqrt(n_sig)}, \code{NA} when \code{n_sig < 2}.
+}
+
+\strong{Bias and standard errors}, denominator \code{n_valid} (\code{n} below):
+\itemize{
+\item \code{mean_estimate}: \code{mean(estimate)} over valid runs.
+\item \code{bias}: \code{mean_estimate - truth}.
+\item \code{emp_se}: \code{sd(estimate)} over valid runs; \code{NA} when \code{n < 2}.
+\item \code{model_se}: the root mean square of the reported standard errors, \code{sqrt(mean(std.error^2))},
+over valid runs.
+\item \code{bias_mcse = sqrt(emp_se^2 / n + reference_mcse^2)}. The reference error is shared across
+experiments and does not disappear with more runs; this formula assumes an independent reference.
+\item \code{emp_se_mcse}: the standard large-sample approximation \code{emp_se / sqrt(2 * (n - 1))}, \code{NA} when
+\code{n < 2}.
+\item \code{model_se_mcse}: the analogous approximation for the root-mean-square SE,
+\code{sqrt(var(std.error^2) / (4 * n * model_se^2))}, \code{NA} when \code{n < 2}.
+}
+
+\strong{Coverage and reference sensitivity}, denominator \code{n_valid}, remaining conditional on the
+supplied reference:
+\itemize{
+\item \code{coverage}: share of runs whose confidence interval, \code{estimate} plus or minus the critical value
+times \code{std.error}, contains \code{truth}. \code{coverage_mcse}: the binomial formula on \code{n_valid}.
+\item \code{coverage_reference_lower}, \code{coverage_reference_upper}: bounds on coverage over candidate
+references within \code{reference_half_width} of \code{truth} — not confidence intervals for coverage.
+\verb{_lower} counts intervals containing the entire reference interval; \verb{_upper} counts intervals
+intersecting it. Increase reference precision if the two differ materially.
+}
+
+\strong{Analytic diagnostics} (Lu, Qiu and Deng 2019), \code{NA} for null targets: \code{analytic_power},
+\code{analytic_type_s}, \code{analytic_type_m}. A known-SE normal approximation using \code{truth} and the
+\emph{empirical} SD \code{emp_se} — not \code{model_se} — even when significance above used t inference. This is
+a rough check at low power, and is not the calculation used by cjpowR or other closed-form tools;
+see the \href{https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/closed_form.md}{closed-form comparison}
+(online).
+
+\strong{Counts:} \code{n_sig}, \code{n_runs} (all attempted runs), \code{n_valid}, \code{n_failed}.
+
+The default printout includes Type I error only for null targets, never because an estimate is
+nonsignificant; for approximate nulls this is rejection under the generated, near-zero contrast.
+Monte Carlo standard errors (\verb{_mcse} columns) follow Morris, White and Crowther (2019).
+\code{power_sim()} also checks approximate nulls for sensitivity to calibration error; see its help
+for the warning threshold and assumptions. A standalone \code{summarise_runs()} call emits no such
+warning, since it constructs no target error bound.
 }
 \description{
 Summarises the estimates of one AMCE from repeated simulations: power (or the Type I error
@@ -55,44 +108,35 @@ A run is significant when \verb{|estimate / std.error|} exceeds the critical val
 missing or infinite estimate, a missing, infinite or non-positive standard error, or unavailable
 per-run degrees of freedom are counted in \code{n_failed} and left out of every measure. Measures are
 conditional on the \code{n_valid} runs with valid inference; \code{n_runs} counts all attempted runs.
-\itemize{
-\item \code{power} (when \code{null} is FALSE) or \code{type_1_error} (when TRUE): share of significant runs.
-\item \code{type_s}: share of significant runs whose estimate has the opposite sign to \code{truth}.
-\item \code{type_m}: exaggeration ratio, the mean of \verb{|estimate| / |truth|} over significant runs.
-\item \code{coverage}: share of runs whose confidence interval, \code{estimate} plus or minus the critical value
-times \code{std.error}, contains \code{truth}.
-}
-
-Type S and Type M follow Gelman and Carlin (2014) and are \code{NA} when \code{null} is TRUE, \code{truth} is zero or no run is
-significant. Monte Carlo standard errors (\verb{_mcse} columns) follow Morris, White and Crowther (2019).
-The default printout includes Type I error only for null targets, never because an estimate is
-nonsignificant. For approximate nulls this is rejection under the generated, near-zero contrast.
-\code{bias_mcse = sqrt(emp_se^2 / n_valid + reference_mcse^2)}. The reference error is shared across
-experiments and does not disappear with more runs. This formula assumes an independent reference.
-\code{coverage_mcse} and Type S/M MCSEs remain conditional on that reference. The conservative sensitivity
-bounds \code{coverage_reference_lower} and \code{coverage_reference_upper} count intervals containing the
-entire reference interval and intervals intersecting it, respectively. They are not confidence
-intervals for coverage; increase reference precision if they differ materially.
-The \code{analytic_} columns give the normal-theory values for \code{truth} and the empirical standard error of
-the estimates (Lu, Qiu and Deng 2019). They assume a known standard error, so at low power they are
-only a rough check. Analytic power and Type S/M are \code{NA} for null targets.
 }
 \examples{
 # 1,000 estimates of an AMCE of 0.05 with a standard error of 0.05
+set.seed(1)
 estimates <- rnorm(1000, mean = 0.05, sd = 0.05)
 summarise_runs(estimates, std.error = rep(0.05, 1000), truth = 0.05)
 
 # Under a true null, the rejection rate is Type I error rather than power
+set.seed(1)
 null_estimates <- rnorm(1000, mean = 0, sd = 0.05)
 summarise_runs(null_estimates, std.error = rep(0.05, 1000), truth = 0)
+
+# An approximate (calibrated) null: truth is illustrative, an independent reference near
+# but not exactly zero, as power_sim() would supply from a calibrated model's verification
+set.seed(1)
+approx_estimates <- rnorm(1000, mean = 0.0003, sd = 0.05)
+summarise_runs(approx_estimates, std.error = rep(0.05, 1000), truth = 0.0003, null = TRUE,
+               reference_mcse = 0.0001, reference_half_width = 0.0003)
 }
 \references{
 Gelman, A., & Carlin, J. (2014). Beyond power calculations: Assessing Type S (sign) and Type M
-(magnitude) errors. \emph{Perspectives on Psychological Science}, 9(6), 641-651.
+(magnitude) errors. \emph{Perspectives on Psychological Science}, 9(6), 641-651. \doi{10.1177/1745691614551642}
 
 Lu, J., Qiu, Y., & Deng, A. (2019). A note on Type S/M errors in hypothesis testing. \emph{British Journal of
-Mathematical and Statistical Psychology}, 72(1), 1-17.
+Mathematical and Statistical Psychology}, 72(1), 1-17. \doi{10.1111/bmsp.12132}
 
 Morris, T. P., White, I. R., & Crowther, M. J. (2019). Using simulation studies to evaluate statistical
-methods. \emph{Statistics in Medicine}, 38(11), 2074-2102.
+methods. \emph{Statistics in Medicine}, 38(11), 2074-2102. \doi{10.1002/sim.8086}
+}
+\seealso{
+\code{\link[=power_sim]{power_sim()}}, \code{\link[=estimate_amce]{estimate_amce()}}
 }

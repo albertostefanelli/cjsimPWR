@@ -9,68 +9,82 @@
 #' @param groups NULL, or group names in the desired order. Report each group's AMCEs and differences
 #'   between each subsequent group and the first group. Named sample sizes and effects are matched
 #'   by name, retaining this order. A single group has AMCEs without differences.
-#' @param sim_runs Positive number of experiments. Defaults to 1000.
-#' @param seed Integer seed for the experiment streams. Required for reproducible runs.
-#' @param cores Positive number of workers, default 1. Values above 1 use base R PSOCK workers;
+#' @param sim_runs Positive whole number of experiments. Defaults to 1000.
+#' @param seed Required single integer seed for the experiment streams; there is no default.
+#' @param cores Positive whole number of workers, default 1. Values above 1 use base R PSOCK workers;
 #'   at most `sim_runs` workers are started. No global future plan or options are changed.
 #' @param keep_runs Retain the estimates, inference and failure reasons from every run? Default FALSE.
-#' @param n_levels,group_name,true_coef Deprecated named aliases for `levels`, `groups`, and
-#'   `true_amce`. The default DGP is now calibrated logit; select `dgp = "odds"` explicitly to
-#'   interpret `true_coef` as legacy score coefficients.
+#' @param n_levels,group_name,true_coef Deprecated aliases for `levels`, `groups`, and `true_amce`,
+#'   kept for backward compatibility with a warning on use. The default DGP is now calibrated logit;
+#'   select `dgp = "odds"` explicitly to interpret `true_coef` as legacy score coefficients.
 #' @param sigma.u_k Deprecated alias. In versions up to 0.2.1 it was the SD of respondent-level
 #'   effects on the probability scale, so with the calibrated models it is used as `sigma`. With
-#'   `dgp = "odds"` it is used as `latent_sigma`, which reproduces the old behaviour exactly.
-#' @param n_attributes Deprecated attribute count, checked against `levels` when supplied.
+#'   `dgp = "odds"` it is used as `latent_sigma`, reproducing only that legacy parameter's
+#'   interpretation; profile pairs are always drawn independently now (see NEWS), so `dgp = "odds"`
+#'   does not reproduce a 0.2.1 experiment's results exactly.
+#' @param n_attributes Deprecated attribute count, checked against `levels` when supplied. See NEWS
+#'   for the full migration table covering every deprecated argument.
 #'
-#' @details Each experiment has its own L'Ecuyer-CMRG stream, so results are identical across worker
-#'   counts and the first runs remain unchanged when `sim_runs` increases. Calibration has its own
-#'   seed argument in `calibration_control`. Equal seed values can overlap calibration and experiment
-#'   draws; the final reference uses a fresh substream. The caller's random-number state is restored after the call.
-#'   If the caller uses Box-Muller normals, a temporary PSOCK process initializes each private seed
-#'   to preserve that generator's cached normal draw, including when `cores = 1`.
+#' @section Reproducibility: Each experiment has its own L'Ecuyer-CMRG stream, so results are identical
+#'   across worker counts and the first runs remain unchanged when `sim_runs` increases. Calibration
+#'   has its own seed argument in `calibration_control`. Equal seed values can overlap calibration and
+#'   experiment draws; the final reference uses a fresh substream. The caller's random-number state,
+#'   including its normal-generator kind, is restored after the call.
 #'
-#'   Bias and coverage use `true_amce`, the numerical reference for the generated population AMCE,
-#'   with its uncertainty retained. Calibrated effects match `requested_amce` within `tolerance`,
-#'   rather than necessarily equalling it. Null classification uses `requested_amce == 0`, or
-#'   `true_amce == 0` when the requested AMCE is unavailable (the deprecated odds model uses scores).
-#'   `null_status` distinguishes `exact`, `calibrated` and `non-null` targets. A single-group requested
-#'   zero is exact in the calibrated models. Differences are exact for shared populations, the linear
-#'   model or levels that are zero in both groups. Separately calibrated groups with equal nonzero
-#'   requests generally produce a small residual contrast: their Type I error is approximate.
+#' @section Interpreting results: Bias and coverage use `true_amce`, the numerical reference for the
+#'   generated population AMCE, with its uncertainty retained. Calibrated effects match
+#'   `requested_amce` within `tolerance`, rather than necessarily equalling it. Null classification
+#'   uses `requested_amce == 0`, or `true_amce == 0` when the requested AMCE is unavailable (the
+#'   deprecated odds model uses scores). A single-group requested zero is exact in the calibrated
+#'   models. Differences are exact for shared populations, the linear model or levels that are zero
+#'   in both groups.
+#'   Separately calibrated groups with equal nonzero requests generally produce a small residual
+#'   contrast: their Type I error is approximate.
 #'   `target_error_bound = abs(true_amce - requested_amce) + reference_half_width` is a nominal 99%
 #'   simultaneous reference confidence bound, not a deterministic guarantee; it is NA for odds inputs.
 #'   Type I error is printed with its Monte Carlo standard error only for null targets, not
 #'   for nonsignificant estimates of nonzero effects. The column is omitted when no Type I error
 #'   estimates are available. To check an effect's false-positive rate, rerun with that effect set
-#'   to zero and the remaining design settings unchanged.
+#'   to zero and the remaining design settings unchanged. See [summarise_runs()] for the full
+#'   definition of each returned measure.
 #'
 #'   An independent final reference, with a fixed budget chosen after calibration acceptance,
 #'   avoids selecting the reference estimate by the acceptance rule. Its MCSE is propagated into
 #'   `bias_mcse`; coverage MCSE remains conditional on the reference, with sensitivity bounds supplied
 #'   by [summarise_runs()]. Increasing `sim_runs` does not reduce reference uncertainty.
 #'   Optional `calibration_control = list(reference_margin = 0.5)` reserves calibration headroom and
-#'   plans a capped final reference budget; see [simulate_experiment()] for rules and diagnostics.
-#'   This experimental option reduces inconclusive checks without guaranteeing confirmation.
-#'   For calibrated nulls, `null_size_sensitivity` is the excess rejection probability in an unbiased,
-#'   known-SE normal test at the target error bound, using `emp_se` as the SE. A warning appears when
-#'   this exceeds `0.1 * sqrt(alpha * (1 - alpha) / n_valid)`. This threshold is a diagnostic choice;
-#'   it is not a bound on size distortion for clustered, biased or non-normal estimates. Tighten
-#'   `calibration_control` if the approximation is material. Exact nulls have sensitivity zero;
-#'   non-null targets and unavailable reference bounds or empirical SEs have NA.
+#'   plans a capped final reference budget; see the Calibration section of [simulate_experiment()] for
+#'   rules and diagnostics. This experimental option reduces inconclusive checks without guaranteeing
+#'   confirmation.
 #'
-#'   All measures condition on successful inference for that effect, using the effect's degrees of
-#'   freedom in each run. Failed runs are counted, never treated as nonsignificant. Sampling or fit
-#'   errors retain all effects with reason `run_error` and an error message. Invalid specifications,
-#'   unavailable CR2 dependencies, calibration failures and worker startup errors stop the call.
+#'   For approximate nulls, an internal check evaluates the excess rejection probability in an unbiased,
+#'   known-SE normal test at the target error bound: `pnorm(-z - h) + pnorm(h - z) - alpha`, where
+#'   `z = qnorm(1 - alpha / 2)` and `h = target_error_bound / emp_se`. A warning appears when this
+#'   exceeds `0.1 * sqrt(alpha * (1 - alpha) / n_valid)`. The threshold is a diagnostic choice, not a
+#'   bound on size distortion for clustered, biased or non-normal estimates. Tighten
+#'   `calibration_control` if the approximation is material. Exact nulls and non-null targets are skipped;
+#'   the check is unavailable when the bound or `emp_se` is non-finite, or `emp_se` is non-positive.
+#'   No diagnostic column is returned, and standalone [summarise_runs()] calls do not emit this warning.
 #'
-#'   Backward compatibility covers named arguments; migrate old positional calls to named arguments.
-#'   The return value is now a list with a numeric performance table rather than formatted strings.
+#' @section Failures: All measures condition on successful inference for that effect, using the
+#'   effect's degrees of freedom in each run. Failed runs are counted in `$failures` and `n_failed`,
+#'   never treated as nonsignificant. Sampling or fit errors retain all effects with reason `run_error`
+#'   and an error message; other row-level failure reasons are defined in [estimate_amce()]. Invalid
+#'   specifications, unavailable CR2 dependencies, calibration failures and worker startup errors stop
+#'   the call instead of producing a row.
+#'
+#' @section Compatibility: Deprecated arguments and positional calls still work with a warning; migrate
+#'   to the current named arguments (see NEWS for the full mapping). The return value is a list with a
+#'   numeric performance table rather than formatted strings.
 #'
 #' @return A `cj_power` list with:
 #'   * `performance`: one row per effect, including effect identifiers, requested and true AMCEs,
 #'     covariance/inference methods, and all [summarise_runs()] measures and counts.
 #'   * `truth`: effect identifiers and the model's input, requested AMCE, true AMCE, implied AMCE SD
-#'     and reference precision, `null_status` and `target_error_bound`. `effect_id` links all result tables.
+#'     and reference precision, and `target_error_bound`. Subgroup-difference rows have
+#'     `amce_sd`, `sd_mcse` and `sd_half_width` equal to `NA`. `effect_id` links `truth`, `performance`,
+#'     `runs` and `failures`; it is not a column of `parameters`, `settings` or the prepared model's
+#'     own truth table.
 #'   * `parameters`, `diagnostics`: calibrated latent parameters and per-group calibration diagnostics.
 #'   * `settings`: resolved design, sample sizes, DGP, inference, seeds, worker count and controls.
 #'   * `failures`: counts by effect, failure reason and error message; empty when no inference fails.

@@ -1,13 +1,16 @@
 #' @details
-#' Use [power_sim()] to simulate repeated paired, forced-choice conjoint experiments and report
-#' power, Type I error, coverage, and Type S and Type M errors with Monte Carlo standard errors.
-#' The default choice model is calibrated to requested average marginal component effects (AMCEs),
-#' optionally with respondent heterogeneity and respondent subgroups. Estimates use
-#' respondent-clustered standard errors.
+#' [power_sim()] runs the whole analysis described above. For individual steps, use
+#' [conjoint_design()] to describe the attributes, [simulate_experiment()] to draw one experiment,
+#' [estimate_amce()] to analyse it, and [summarise_runs()] to summarise estimates from repeated
+#' experiments.
 #'
-#' For individual steps, use [conjoint_design()] to describe the attributes,
-#' [simulate_experiment()] to draw an experiment, [estimate_amce()] to analyse it,
-#' and [summarise_runs()] to summarise estimates from repeated experiments.
+#' Full explanations live in the package guides, online:
+#' [simulation model](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/simulation_model.md),
+#' [clustering and inference](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/clustering.md),
+#' [power and Type I error](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/type_1_error.md),
+#' [calibration and reference precision](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/calibration.md),
+#' [comparison to closed-form power formulas](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/closed_form.md) and
+#' [comparison to DeclareDesign](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/declaredesign.md).
 #' Run `news(package = "cjsimPWR")` for release notes and `citation("cjsimPWR")` for citations.
 #'
 #' @seealso [power_sim()], [conjoint_design()], [simulate_experiment()], [estimate_amce()],
