@@ -175,7 +175,7 @@ power_sim <- function(levels = NULL, true_amce = NULL, units, n_tasks, groups = 
       reference_mcse = truth$reference_mcse[id], reference_half_width = truth$reference_half_width[id])
   }))
   performance <- data.frame(truth, vcov = vcov, inference = inference, performance, row.names = NULL)
-  performance <- diagnose_nulls(performance, alpha)
+  diagnose_nulls(performance, alpha, approximate_nulls(model))
   class(performance) <- c("cj_performance", "data.frame")
   failures <- power_failures(runs, truth)
   settings <- list(design = design, units = units, n_tasks = n_tasks, groups = groups,
@@ -192,24 +192,21 @@ power_sim <- function(levels = NULL, true_amce = NULL, units, n_tasks, groups = 
 }
 
 # Known-SE, unbiased normal benchmark only: this is not a size bound for the fitted cluster test.
-diagnose_nulls <- function(performance, alpha) {
+diagnose_nulls <- function(performance, alpha, approximate) {
   b <- performance$target_error_bound
-  calibrated <- performance$null_status == "calibrated"
-  eligible <- calibrated & is.finite(b) & is.finite(performance$emp_se) & performance$emp_se > 0
+  eligible <- approximate & is.finite(b) & is.finite(performance$emp_se) & performance$emp_se > 0
   sensitivity <- rep(NA_real_, nrow(performance))
-  sensitivity[performance$null_status == "exact"] <- 0
   shift <- b[eligible] / performance$emp_se[eligible]
   critical <- stats::qnorm(1 - alpha / 2)
   sensitivity[eligible] <- pmax(0, stats::pnorm(-critical - shift) +
     stats::pnorm(shift - critical) - alpha)
-  performance$null_size_sensitivity <- sensitivity
   # One tenth of the nominal null MCSE is a diagnostic threshold, not a statistical guarantee.
   threshold <- 0.1 * sqrt(alpha * (1 - alpha) / pmax(1, performance$n_valid))
   material <- eligible & !is.na(sensitivity) & sensitivity > threshold
   if (any(material)) warning("Calibrated null sensitivity exceeds one tenth of the nominal Type I error MCSE for effect(s) ",
     paste(which(material), collapse = ", "), ". Type I error is approximate; tighten calibration_control. ",
     "This normal-theory diagnostic is not a guarantee for clustered inference.", call. = FALSE)
-  performance
+  invisible(NULL)
 }
 
 deprecated_power_arg <- function(old, new, conflict = FALSE, note = "") {

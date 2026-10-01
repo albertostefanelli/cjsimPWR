@@ -396,11 +396,6 @@ prepare_dgp <- function(design, true_amce, groups = NULL, sigma = 0, dgp = c("lo
       true_amce = reference$mean,
       amce_sd = reference$sd, reference_mcse = reference$mcse, reference_half_width = reference$half_width,
       sd_mcse = reference$sd_mcse, sd_half_width = reference$sd_half_width, stringsAsFactors = FALSE)
-    null <- if (dgp == "odds") reference$mean == 0 else requested == 0
-    # Logit zeros follow from exchangeability, linear zeros from construction. Legacy odds zeros
-    # are structurally exact only without coefficient heterogeneity (or via shared populations below).
-    exact_null <- null & (dgp != "odds" | (requested == 0 & latent_sd[g, ] == 0))
-    results[[g]]$null_status <- ifelse(exact_null, "exact", ifelse(null, "calibrated", "non-null"))
     parameter_tables[[g]] <- data.frame(group = if (is.null(groups)) NA_character_ else groups[g],
       meta[c("attribute", "level", "reference_level")], latent_mean = gamma[g, ],
       latent_sd = latent_sd[g, ], utility_sd = raw_sd[g, ],
@@ -421,10 +416,6 @@ prepare_dgp <- function(design, true_amce, groups = NULL, sigma = 0, dgp = c("lo
         a$true_amce <- 0
         a$reference_mcse <- a$reference_half_width <- 0
       }
-      null <- ifelse(is.na(a$requested_amce), a$true_amce == 0, a$requested_amce == 0)
-      exact_null <- null & (shared | dgp == "linear" |
-        (results[[g]]$null_status == "exact" & b$null_status == "exact"))
-      a$null_status <- ifelse(exact_null, "exact", ifelse(null, "calibrated", "non-null"))
       a$amce_sd <- a$sd_mcse <- a$sd_half_width <- NA_real_  # no paired respondent-level contrast across populations
       a
     })
@@ -440,6 +431,25 @@ prepare_dgp <- function(design, true_amce, groups = NULL, sigma = 0, dgp = c("lo
                  latent_sigma = latent_sigma, gamma = gamma, latent_sd = latent_sd,
                  raw_sd = raw_sd, baseline_sd = baseline_sd,
                  truth = truth, parameters = parameters, diagnostics = diagnostics, control = control), class = "cj_dgp")
+}
+
+# Internal warning eligibility, in truth-table order; never inferred from a rounded residual.
+approximate_nulls <- function(model) {
+  truth <- model$truth
+  null <- ifelse(is.na(truth$requested_amce), truth$true_amce == 0, truth$requested_amce == 0)
+  n_groups <- nrow(model$input)
+  group_null <- matrix(null[seq_len(length(model$input))], nrow = n_groups, byrow = TRUE)
+  # Logit zeros follow from exchangeability, linear zeros from construction. Legacy odds zeros
+  # are structurally exact only without coefficient heterogeneity (or via shared populations).
+  group_exact <- group_null & (model$dgp != "odds" | (model$input == 0 & model$latent_sd == 0))
+  exact <- as.vector(t(group_exact))
+  if (n_groups > 1) for (g in 2:n_groups) {
+    shared <- identical(model$gamma[g, ], model$gamma[1, ]) &&
+      identical(model$raw_sd[g, ], model$raw_sd[1, ]) &&
+      identical(model$baseline_sd[g, ], model$baseline_sd[1, ])
+    exact <- c(exact, shared | model$dgp == "linear" | (group_exact[g, ] & group_exact[1, ]))
+  }
+  null & !exact
 }
 
 calibrate_dgp_group <- function(design, requested, sigma, dgp, latent_sigma, control) {

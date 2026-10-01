@@ -172,12 +172,6 @@ print.cj_performance <- function(x, digits = 3, ...) {
   for (col in intersect(c("type", "group", "attribute", "level", "true_amce"), names(x))) {
     out[[col]] <- if (col == "true_amce") round(x[[col]], 4) else x[[col]]
   }
-  calibrated <- "null_status" %in% names(x) && any(x$null_status == "calibrated")
-  if ("null_status" %in% names(x)) out$null_status <- x$null_status
-  if (calibrated && "target_error_bound" %in% names(x)) {
-    out$target_error_bound <- ifelse(x$null_status == "calibrated",
-      formatC(x$target_error_bound, format = "e", digits = digits), "")
-  }
   for (m in names(labels)) {
     if (m %in% names(x) && !all(is.na(x[[m]]))) {
       out[[labels[[m]]]] <- format_with_mcse(x[[m]], x[[paste0(m, "_mcse")]], digits)
@@ -191,9 +185,6 @@ print.cj_performance <- function(x, digits = 3, ...) {
   cat("Monte Carlo standard errors in parentheses.\n")
   if ("Type I error" %in% names(out)) {
     cat("Power is for non-null targets; Type I error is for null targets, not nonsignificant estimates.\n")
-    if (calibrated) {
-      cat("Calibrated nulls report approximate Type I error; the target error bound is a reference confidence bound.\n")
-    }
   }
   cat("Measures are conditional on runs with valid inference.\n")
   invisible(x)
