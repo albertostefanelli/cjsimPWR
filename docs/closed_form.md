@@ -1,273 +1,323 @@
-# Closed-form power and simulation
+Power to detect an average marginal component effect (AMCE) can be
+computed in closed form, instantly and without simulation error. In
+most designs, the closed form gives the same power as simulation.
+Simulation is nonetheless the package's default, because the two
+differ in some situations that are common in practice. 
 
-Power for conjoint experiments can also be computed from the closed-form formulas of Schuessler and
-Freitag (2020), implemented in their [cjpowR](https://github.com/m-freitag/cjpowR) package. The formulas
-are instant, need no model of how respondents choose, and take the same AMCEs as cjsimPWR. This page
-explains what they assume, when cjsimPWR gives the same answers, and when and why it does not.
+# Closed form 
 
-## What the formulas compute
+## The task-level estimator
 
-The formulas treat an AMCE as a comparison between two groups of profiles: those showing the level of
-interest and those showing the reference level of the same attribute. With uniform randomization, each
-group holds 1/L of the rated profiles, where L is the number of levels of the attribute. The standard
-error is that of a difference between two proportions:
+Consider $N$ respondents who each complete $T$ tasks, choosing one of
+two profiles in each. Focus on one attribute with $L$ levels and on
+one single comparison, between a level of interest and a reference
+level. Respondent $i$'s AMCE, $\tau_i$, is how much more likely that
+respondent is to choose a profile when it shows the level of interest
+than when it shows the reference level, averaging over everything
+else the design randomizes. The population AMCE, $\tau$, is the
+average of these individual effects, and $\sigma$ is their standard
+deviation, i.e., how much the effect varies from one respondent to
+another. Assume, as in a standard conjoint design, that each
+attribute's level is drawn independently of the other's, with all $L$
+levels equally likely.
 
-```
-SE       = sqrt((p1 * (1 - p1) + p0 * (1 - p0)) / (n / L))
-p0       = 0.5 - AMCE / 2,   p1 = 0.5 + AMCE / 2
-critical = qnorm(1 - alpha / 2)
-rejection_probability = pnorm(AMCE / SE - critical) + pnorm(-AMCE / SE - critical)
-```
+For each of a task's two profiles, $j = 1, 2$, let $h_j = 1$ if the
+profile shows the level of interest, $h_j = -1$ if it shows the
+reference level and $h_j = 0$ if it shows any other level. Let $Y_1 =
+1$ if the first profile is chosen and $Y_1 = 0$ if the second is. The
+task's score is
 
-This is the full two-sided normal expression used by
-[cjpowR](https://github.com/m-freitag/cjpowR/blob/master/R/amce.R), with its default treatment
-probability of 0.5. For a nonzero AMCE the rejection probability is power; at zero it is the theoretical
-Type I error rate. Both tails matter: keeping only the first term would give 2.5%, not 5%, at zero
-when `alpha = 0.05`, and would not handle negative AMCEs correctly.
+$$ S = \frac{L}{2}\,(h_1 - h_2)\left(Y_1 - \frac12\right). $$
 
-Here n = respondents × tasks × 2 is the number of rated profiles, which Schuessler and Freitag call the
-effective sample size. Three numbers go in: the AMCE, the number of levels of its attribute and n.
-Nothing else about the study does: not the number of attributes, not the other attributes' effects, and
-not whether the n profiles come from many respondents or from a few who complete many tasks.
 
-Behind this simplification lie three assumptions:
+$S$ indicates whether the choice favoured the level of interest or the
+reference level. The term $Y_1 - \frac12$ equals $+\frac12$ when the
+first profile is chosen and $-\frac12$ when the second is, so it
+records which profile won. The term $h_1 - h_2$ records which choice
+favour the level of interest. If it is positive, the choice favours
+the level of interest; if it is negative, it favours the reference
+level. If $h_1 - h_2 = 0$, the score is zero whichever profile is
+chosen. This happens when (a) both profiles show the same level or
+(b) neither profile shows the level of interest or the reference
+level. The latter is possible only when the attribute has more than
+two levels.
 
-1. **The effect in question is the only one that shapes respondents' choices.** Apart from it, every
-   choice is treated as a coin flip.
-2. **Every rated profile is an independent observation.** 500 respondents who complete 5 tasks count
-   the same as 2,500 respondents who complete one.
-3. **Type I error equals the significance level.** The formula treats its standard error as exact and
-   uses normal critical values, so it assumes that a true null is rejected 5% of the time at a 5%
-   significance level, and that a 95% confidence interval covers the true effect 95% of the time.
+For a binary attribute, $L/2 = 1$ and the score is a simple win–loss
+record. Take a candidate's gender, with male as the level of interest
+and female as the reference level: $S = 1$ when a man is chosen over
+a woman, $S = -1$ when a woman is chosen over a man, and $S = 0$ when
+both candidates are men or both are women.[^example_binary]
 
-## A comparison
+[^example_binary]: To see that the average score equals the AMCE, take
+1,000 tasks. Under randomization, about 500 show one man and one
+woman, 250 show two men and 250 show two women. If the man is chosen
+in 55 percent of the mixed tasks, 275 tasks score +1, 225 score −1
+and the other 500 score zero, so the average score is (275 −
+225)/1,000 = 0.05. The AMCE is also 0.05: of the 1,000 profiles
+showing a man, 525 are chosen (275 against a woman, plus one man in
+each of the 250 tasks with two men), against 475 of the 1,000 showing
+a woman.
 
-The table holds the AMCE of interest at 0.05 and the number of rated profiles at 2,000, and varies what
-the formulas leave out. For every row, the formula gives a standard error of 0.0223 and a power of 0.61.
-The simulated standard error is the average respondent-clustered standard error that the analysis
-reports; in every row it matched the actual spread of the estimates to within 2%. Each row is based on
-4,000 simulated experiments, so simulated power has a Monte Carlo standard error of about 0.008.
+With more than two levels, a task also counts when only one of the two
+levels appears, against a third level. If the level of interest wins,
+or the reference level loses, the task scores $L/4$, because either
+outcome widens the gap between how often the two levels are chosen;
+the reverse outcomes score $-L/4$. A task showing both levels counts
+double, $\pm L/2$, because one choice is then a win for one level and
+a loss for the other.[^example_nonbinary]
 
-| Row | Design                                                  | Respondents × tasks | `sigma` | Standard error | Power |
-| --: | :------------------------------------------------------ | :-----------------: | :-----: | -------------: | ----: |
-|   1 | The attribute alone                                     |      1,000 × 1      |    0    |         0.0223 |  0.60 |
-|   2 | The attribute alone                                     |       200 × 5       |    0    |         0.0223 |  0.61 |
-|   3 | Plus three attributes whose AMCEs are all zero          |      1,000 × 1      |    0    |         0.0224 |  0.62 |
-|   4 | Plus three attributes with AMCEs of 0.1 to 0.2 in size  |      1,000 × 1      |    0    |         0.0215 |  0.65 |
-|   5 | The attribute alone                                     |      1,000 × 1      |  0.10   |         0.0223 |  0.60 |
-|   6 | The attribute alone                                     |       200 × 5       |  0.10   |         0.0232 |  0.57 |
-|   7 | The attribute alone                                     |      100 × 10       |  0.15   |         0.0265 |  0.48 |
-|   8 | Plus three attributes with AMCEs of 0.1 to 0.2 in size  |       200 × 5       |  0.10   |         0.0224 |  0.62 |
+[^example_nonbinary]: For example, take a candidate's age, with four
+levels (40, 50, 60 and 70), 50 as the level of interest and 40 as the
+reference level, so that $L/4 = 1$ and $L/2 = 2$. A task scores +1
+when a 50-year-old beats a 60- or 70-year-old, or when a 40-year-old
+loses to one, and −1 when the reverse happens. A task with a
+50-year-old and a 40-year-old scores +2 if the 50-year-old is chosen
+and −2 if the 40-year-old is.
 
-Rows 1, 2, 3 and 5 agree with the formula, which is right to ignore the number of attributes (row 3),
-several tasks per respondent when everyone has the same preferences (row 2), and differing preferences
-when every respondent completes a single task (row 5). The other rows show what happens when its
-simplifications do not hold. The code is at the end of this page.
+The factor $L/2$ puts the score on the scale of the AMCE. Only
+profiles that show the level of interest or the reference level add
+to the score, and because all levels are equally likely, they make
+up, on average, $2/L$ of all profiles. The remaining profiles add
+zeros, which would shrink the average score to $2/L$ of the AMCE;
+multiplying by $L/2$ corrects this.[^dilution] The average of all
+$NT$ scores estimates the population AMCE:
 
-## Each effect is computed as if it were the only one (1)
+[^dilution]: With two levels, as for gender, every profile shows one
+of the two levels being compared, so nothing is diluted and $L/2 =
+1$. With four, as for age, only half of the profiles show 50 or 40;
+the other half show 60 or 70 and add zeros, so without the factor the
+average score would be half the AMCE, and multiplying by $L/2 = 2$
+restores it.
 
-In a real conjoint, respondents weigh all attributes at once. A profile with several attractive features
-tends to be chosen whichever level of the attribute of interest it shows, and one with several
-unattractive features tends to be rejected, so many choices are far from a coin flip. The regression that
-estimates the AMCEs includes every attribute and makes use of this: the more the other attributes
-explain, the less unexplained noise is left around each AMCE.
+$$
+\widehat{\tau} = \frac{1}{NT}\sum_{i=1}^{N}\sum_{t=1}^{T} S_{it}, 
+$$
 
-Schuessler and Freitag set this aside on purpose. They analyse each attribute in a regression of its own,
-which in large samples gives the same estimates as the full regression, and they place the choice
-probabilities around 0.5 because that maximises the variance, which they describe as a conservative
-choice. The formulas therefore give a worst case, and the full regression is more precise whenever the
-other attributes have real effects. In row 4, three attributes with AMCEs of 0.1 to 0.2 reduce the
-standard error by about 4% and raise power from 0.61 to 0.65. Adding attributes without effects changes
-nothing (row 3), so what matters is the size of the other effects, not their number.
+where $S_{it}$ is the score of respondent $i$'s $t$-th task. Because
+each task's expected score is its respondent's AMCE, and respondents
+are sampled at random, $\widehat{\tau}$ is unbiased: on average
+across samples, it equals $\tau$. Because it is a simple average, its
+variance, and hence power, also has a closed form.
 
-This error is on the safe side: on this count, the formulas can only understate power.
+## Sampling variance
 
-## Every rated profile counts as an independent observation (2)
+Under the assumptions of a standard conjoint design,[^assumptions] the
+variance of $\widehat{\tau}$ depends on how much a single task's
+score varies and on how strongly two scores from the same respondent
+are related.
 
-The closed-form formulas count 5,000 profiles rated by 500 respondents the same as 5,000 profiles rated
-by 2,500. This approximation works well when everyone has the same preferences (row 2) or when each
-respondent completes a single task (row 5). It becomes too optimistic when respondents differ and
-complete several tasks (rows 6 and 7). A respondent who cares a lot about an attribute tends to give it
-similar weight in every task, so their choices partly repeat the same information. A sample that happens
-to include more people who strongly favour (or oppose) a particular level therefore gives a larger (or
-smaller) estimated effect for that level, and additional tasks per respondent cannot average this out.
+[^assumptions]: Respondents are sampled independently of one another;
+all profiles, including the two in each task, are drawn independently
+of one another, with all levels of each attribute equally likely; and
+each respondent's preferences stay the same from task to task and,
+given those preferences, the choice in one task does not affect the
+choice in another, so that there is no learning, fatigue or
+carryover. The second is a form of the randomization assumption of
+Hainmueller, Hopkins and Yamamoto(2014), and the third is their
+stability and no-carryover assumption.
 
-Schuessler and Freitag discuss this point at length. They argue that clustering by respondent is
-unnecessary when conclusions are meant only for the people who took part, because profiles, not people,
-are randomized. For conclusions about the population the respondents were drawn from, the reason
-Hainmueller, Hopkins and Yamamoto (2014) give for clustering, they accept that clustering is warranted
-but argue that it makes little difference in practice. Row 6 shows a loss of the order they report;
-row 7, however, shows that it can be much larger when respondents complete many tasks and disagree
-strongly.
+Because $(Y_1 - \frac12)^2 = \frac14$ whichever profile is chosen, the
+squared score, $S^2 = \frac{L^2}{16}(h_1 - h_2)^2$, depends only on
+the levels the task shows, and its average over the randomization is
+$L/4$ for any number of levels.[^squared_score] Since the expected
+score is $\tau$, the variance of a task's score is $L/4 - \tau^2$.
 
-Preference heterogeneity is common in conjoint experiments (Robinson and Duch, 2024), and it is not
-always captured by the characteristics used to define subgroups. For instance, respondents may be
-unwilling to disclose socially unacceptable attitudes, such as prejudice against ethnic-minority
-candidates. Robinson and Duch (2024) also show that heterogeneity persists within well-measured
-ideological subgroups, and even among respondents at similar points on a 0–10 ideology scale.
+[^squared_score]: Each profile shows one of the two compared levels,
+so that $h_j^2 = 1$, with probability $2/L$. The product $h_1 h_2$
+averages zero, because the two profiles are drawn independently and
+each is as likely to show the level of interest as the reference
+level. The average of $(h_1 - h_2)^2 = h_1^2 + h_2^2 - 2h_1h_2$ is
+therefore $4/L$, and that of $S^2$ is $\frac{L^2}{16} \cdot \frac{4}
+{L} = \frac{L}{4}$. For gender, take 1,000 tasks: about 500 show one
+man and one woman and score ±1, and the other 500 score zero, so the
+average squared score is 500/1,000 = 1/2 = $L/4$, whichever
+candidates are chosen.
 
-Before fielding a study, researchers can therefore use pilot evidence to specify plausible
-average effects and the variation around them, represented by `sigma`. Known subgroups with different
-average effects should be specified separately; `sigma` then represents the remaining variation in
-effects within each subgroup, including variation driven by attitudes that cannot be measured. Because
-this remainder is rarely known precisely, compare several plausible values of `sigma`, for example
-`sigma = c(0, 0.025, 0.05, 0.10, 0.15)`. With an average AMCE of 0.05, `sigma = 0.025` means
-respondents agree on the direction and differ only in strength (about 2% have an effect of the opposite
-sign).
+Scores from different respondents are independent. Two scores from the
+same respondent share that respondent's AMCE, $\tau_i$, as their
+expected value and, given the respondent's preferences, are otherwise
+independent, so their covariance is the variance of the individual
+AMCEs, $\sigma^2$. For gender ($L = 2$, so $L/4 = 0.5$), suppose that
+half the respondents prefer men, with an AMCE of 0.20, and half
+prefer women, with an AMCE of −0.10, so that $\tau = 0.05$ and
+$\sigma = 0.15$. A respondent who prefers men has an expected score
+of 0.20 in every task, and one who prefers women −0.10, so two scores
+from the same respondent tend to be high together or low together.
+[^covariance]
 
-## Type I error equals the significance level (3)
+[^covariance]: Given the respondent, two tasks are independent, so the
+expected product of their scores is $\tau_i^2$, whose average across
+respondents is $\tau^2 + \sigma^2$. Subtracting the product of the
+two expected scores, $\tau^2$, leaves a covariance of $\sigma^2$. In
+the gender example, the expected product is $0.20^2 = 0.04$ for a
+respondent who prefers men and $(-0.10)^2 = 0.01$ for one who prefers
+women, or 0.025 on average, and subtracting $\tau^2 = 0.0025$ gives
+$0.0225 = 0.15^2$.
 
-The closed-form formulas rely on the normal approximation and assume that the standard errors are right,
-so that a true null is rejected 5% of the time and a 95% confidence interval covers the true effect 95%
-of the time. With few respondents or small subgroups, both can fail: conventional respondent-clustered
-standard errors can be too small, and normal critical values too permissive. These small-sample
-problems motivate the corrections discussed by
-[Pustejovsky and Tipton (2018)](https://doi.org/10.1080/07350015.2016.1247004).
+The estimate averages $NT$ scores: $T$ from each of $N$ independent
+respondents, with covariance $\sigma^2$ between any two from the same
+respondent. Its variance, $V$, is therefore[^variance_derivation]
 
-cjsimPWR analyses each simulated experiment with the same estimator and standard errors that applied
-studies use. It therefore measures the Type I error rate for true nulls and confidence interval
-coverage instead of assuming them, and reports a Monte Carlo standard error for each figure. A
-false-positive check is most useful in three situations:
+[^variance_derivation]: The sum of one respondent's $T$ scores has
+variance $T(L/4 - \tau^2) + T(T - 1)\sigma^2$. These are the variances of the
+$T$ scores plus twice the covariances of the $T(T - 1)/2$ pairs of
+scores. Respondents are independent, so the sum of all $NT$ scores
+has $N$ times this variance, and dividing by $(NT)^2$ gives the first
+line. The second line writes $(T - 1)\sigma^2$ as
+$T\sigma^2 - \sigma^2$.
 
-- **Few respondents, especially with many tasks each.** Extra tasks add profile observations, not
-  independent respondents, and clustered inference depends on the number of respondents: with few of
-  them, standard errors tend to be too small and the test can reject too often. A calculation based on
-  the total number of profiles cannot reveal this.
-- **Small or unequal subgroups.** A large total sample can hide a small subgroup whose AMCEs and group
-  differences rest on few respondents.
-- **Comparing designs or analysis choices.** When one respondent/task allocation, heterogeneity
-  scenario or inference method appears more powerful, a null check helps establish whether that
-  advantage comes with an acceptable false-positive rate.
+$$
+\begin{aligned} V &= \frac{L/4 - \tau^2 + (T - 1)\,\sigma^2}{NT} \\
+  &= \frac{L/4 - \tau^2 - \sigma^2}{NT} + \frac{\sigma^2}{N}.
+\end{aligned} 
+$$
 
-Note that agreement between simulation and the closed-form formula on power does not remove the need
-for Type I error checks: agreement at a nonzero effect says nothing about how inference behaves when the
-effect is zero.
+The second line separates two sources of error. The first is
+measurement noise: a task's score varies around its respondent's
+AMCE, $\tau_i$, with a variance that averages
+$L/4 - \tau^2 - \sigma^2$ across respondents,[^noise] and averaging
+over all $NT$ tasks divides it by $NT$, giving the first term. The
+second is that respondents' AMCEs differ from $\tau$, with variance
+$\sigma^2$. Each respondent's difference recurs in all of that
+respondent's tasks, so only more respondents reduce it, giving the
+second term, $\sigma^2/N$. In other words, more tasks reduce
+measurement noise and more respondents reduce sampling variation.
+[^floor]
 
-### How to make the comparison
+[^noise]: Given the respondent, the expected squared score is still
+$L/4$ and the expected score is $\tau_i$, so a task's score varies
+around $\tau_i$ with variance $L/4 - \tau_i^2$. Because the average
+of $\tau_i^2$ across respondents is $\tau^2 + \sigma^2$, this
+variance averages $L/4 - \tau^2 - \sigma^2$. 
 
-For an AMCE of interest, simulate the planned nonzero target to estimate power, then simulate again
-with only that target set to zero. Keep the other effect targets, groups, sample sizes, tasks,
-heterogeneity, significance level and analysis method unchanged. For example, compare an education
-AMCE of 0.05 with an education AMCE of zero while keeping an experience AMCE of 0.10 in both scenarios.
-The first run measures detection of an education effect; the second measures false alarms about
-education when experience still matters. A zero average does not require setting heterogeneity to zero:
-individual preferences can differ while cancelling on average.
+[^floor]: However many tasks each respondent completes, $V$ cannot
+fall below $\sigma^2/N$, the variance of the average AMCE of $N$
+randomly sampled respondents.
 
-## The errors can cancel
+Equivalently, $V$ is the variance that $NT$ tasks by $NT$ different
+respondents would give, multiplied by a factor that reflects
+clustering:
 
-Violations of the first two assumptions err in opposite directions. Row 8 combines them: the other
-attributes' effects make the estimate more precise, heterogeneity across five tasks makes it less
-precise, and the resulting power of 0.62 is close to the formula's 0.61. The agreement is a
-coincidence. With more tasks or more heterogeneity the formula would be too optimistic, and with larger
-effects on the other attributes too pessimistic; only a simulation of the design shows which.
+$$ V = \frac{L/4 - \tau^2}{NT}\,\bigl[1 + (T - 1)\,\rho\bigr],
+\qquad
+\rho = \frac{\sigma^2}{L/4 - \tau^2}. $$
 
-## Two differences from cjpowR's implementation
+Here $\rho$ is the correlation between two scores from the same
+respondent, their covariance divided by their variance, and $1 +
+(T - 1)\rho$ is the design effect of cluster sampling (Kish 1965),
+with respondents as clusters. Because $\rho$ is multiplied by $T -
+1$, even a small correlation raises the variance considerably when
+respondents complete many tasks.[^design_effect]
 
-The three assumptions above are deliberate simplifications of the design. Two further points are
-matters of implementation, and both affect what `cjpowR::cjpowr_amce()` returns. They refer to
-[cjpowR 1.0.2](https://github.com/m-freitag/cjpowR/blob/5852d88338235abc28919b2941ea56fe0532d48d/R/amce.R).
+[^design_effect]: In the gender example, $\rho = 0.0225/
+(0.5 - 0.0025) \approx 0.045$. With 10 tasks per respondent, the
+design effect is $1 + 9 \times 0.045 \approx 1.41$: the variance is
+41 percent larger than if each task came from a different respondent.
+With 50 tasks per respondent, it is more than three times as large.
 
-**The baseline choice probability.** `treat.prob` defaults to 0.5, which places the reference level's
-choice probability at `0.5 - AMCE / 2`, as above. In a uniformly randomized forced-choice design the
-marginal choice probabilities must average 0.5 across all L levels of an attribute, which places it at
-`0.5 - sum(AMCE) / L`, summing over all non-reference levels. The two agree whenever an attribute has
-two levels. With more levels they agree only when `sum(AMCE) / L` equals half the AMCE being evaluated;
-they can differ even when only one AMCE is nonzero. For a four-level attribute with AMCEs of 0.05,
-0.10 and 0.15, the baseline implied by the requested effects is 0.425, whereas the default assumes
-0.475 when evaluating the 0.05 contrast. For a fixed AMCE, centering the two choice probabilities on
-0.5 maximizes the sum of their variances, so the default is conservative on this count: across the
-effect targets on this page at 2,000 profiles, it inflates the formula's standard error by at most
-0.8% and lowers power by at most 0.005 relative to using the design-implied baseline.
+## Power and sample size
 
-**Type S error for negative AMCEs.** `cjpowr_amce()` computes `type_s` as
-`pnorm(-AMCE / se - qnorm(1 - alpha / 2)) / power`, the probability that a significant estimate falls
-below zero. That is the wrong-sign tail only when the AMCE is positive; for a negative AMCE it is the
-right-sign tail, so the value returned is one minus the correct one. At `amce = -0.10`, `n = 2000`
-and `levels = 3` it reports a Type S error of approximately 1 (0.9999999906), whereas the wrong-sign
-probability under the same normal approximation and standard error is 9.4e-09. `power_sim()` reports
-the observed wrong-sign share in `type_s`, which is zero if no significant estimates have the wrong
-sign. Its separate `analytic_type_s` uses the empirical standard deviation of the simulated estimates,
-so it need not equal 9.4e-09. With `n` supplied, cjpowR's two-sided `power` calculation handles AMCEs
-of either sign correctly, as does its `type_s` calculation for positive AMCEs.
+Power then follows from the standard formula: if $\widehat{\tau}$ is
+normal around $\tau$ with variance $V$, the power of a two-sided test
+that the AMCE is zero, at significance level $\alpha$, is
 
-## Reproducing the comparison
+$$
+\Phi\!\left(\frac{|\tau|}{\sqrt{V}} - z_{1-\alpha/2}\right) +
+\Phi\!\left(-\frac{|\tau|}{\sqrt{V}} - z_{1-\alpha/2}\right), $$
 
-```r
-library(cjsimPWR)
+where $\sqrt{V}$ is the standard error of the estimate, $|\tau|/\sqrt
+{V}$ the size of the effect in standard errors, $\Phi$ the standard
+normal cumulative distribution function and $z_p = \Phi^{-1}(p)$. The
+first term is the probability that the estimate is significant and
+has the same sign as $\tau$; the second is the probability that it is
+significant with the opposite sign, which is negligible unless power
+is low. When $\tau = 0$, each term equals $\alpha/2$, and the formula
+returns $\alpha$, the probability of rejecting a true null. 
 
-# The formula; cjpowR::cjpowr_amce(amce = 0.05, n = 2000, levels = 2) gives the same power
-formula_se <- function(amce, n, levels) {
-  p0 <- 0.5 - amce / 2
-  p1 <- 0.5 + amce / 2
-  sqrt((p1 * (1 - p1) + p0 * (1 - p0)) / (n / levels))
-}
-formula_rejection <- function(amce, n, levels, alpha = 0.05) {
-  signal <- amce / formula_se(amce, n, levels)
-  critical <- qnorm(1 - alpha / 2)
-  pnorm(signal - critical) + pnorm(-signal - critical)
-}
-formula_se(0.05, n = 2000, levels = 2)         # 0.0223
-formula_rejection(0.05, n = 2000, levels = 2)  # 0.61
-formula_rejection(0, n = 2000, levels = 2)     # 0.05: theoretical null rate
+Since $V$ is the variance of one
+respondent's average score divided by $N$, the number of respondents
+needed is
 
-# The table; each row is one power_sim() call. Add cores = 4, say, to run faster: results are
-# identical for any number of workers.
-others <- list(c(0.1, 0.2), c(-0.1, 0.1), c(0.1, 0.15, 0.2))
-zeros  <- list(c(0, 0), c(0, 0), c(0, 0, 0))
-rows <- list(
-  list(levels = 2, true_amce = list(0.05), units = 1000, n_tasks = 1, sigma = 0),
-  list(levels = 2, true_amce = list(0.05), units = 200, n_tasks = 5, sigma = 0),
-  list(levels = c(2, 3, 3, 4), true_amce = c(list(0.05), zeros), units = 1000, n_tasks = 1, sigma = 0),
-  list(levels = c(2, 3, 3, 4), true_amce = c(list(0.05), others), units = 1000, n_tasks = 1, sigma = 0),
-  list(levels = 2, true_amce = list(0.05), units = 1000, n_tasks = 1, sigma = 0.10),
-  list(levels = 2, true_amce = list(0.05), units = 200, n_tasks = 5, sigma = 0.10),
-  list(levels = 2, true_amce = list(0.05), units = 100, n_tasks = 10, sigma = 0.15),
-  list(levels = c(2, 3, 3, 4), true_amce = c(list(0.05), others), units = 200, n_tasks = 5, sigma = 0.10)
-)
-results <- lapply(rows, function(row) {
-  do.call(power_sim, c(row, sim_runs = 4000, seed = 1))$performance[1, c("model_se", "emp_se", "power")]
-})
-do.call(rbind, results)
+$$ N \approx
+\left(\frac{L/4 - \tau^2 - \sigma^2}{T} + \sigma^2\right)
+\left(\frac{z_{1-\alpha/2} + z_\pi}{|\tau|}\right)^2. $$
 
-# Few respondents: Type I error for the attribute whose AMCE is zero
-for (inference in c("normal", "t")) {
-  few <- power_sim(levels = c(2, 2), true_amce = list(0.05, 0), units = 30, n_tasks = 10,
-                   sigma = 0.10, inference = inference, sim_runs = 4000, seed = 1)
-  print(few)  # the default output includes power and Type I error, each with its Monte Carlo SE
-}
-```
+The first factor is the variance of one respondent's average score,
+which combines the two sources of error above. The second sets the
+precision needed to detect the effect and grows quickly as the effect
+shrinks: halving $\tau$ roughly quadruples $N$. As $T$ grows, the
+first factor falls towards $\sigma^2$, so however many tasks each
+respondent completes, at least $\sigma^2 (z_
+{1-\alpha/2} + z_\pi)^2/\tau^2$ respondents are needed; with fewer,
+no number of tasks reaches the target power. 
 
-The implementation examples can be reproduced separately (the Type S comparison requires cjpowR):
+## Comparison with simulation
 
-```r
-amces <- c(0.05, 0.10, 0.15)
-0.5 - sum(amces) / (length(amces) + 1)  # 0.425: design-implied baseline
-0.5 - amces[1] / 2                     # 0.475: default for the 0.05 contrast
+Under the assumptions of a standard conjoint design, $V$ is the exact
+variance of $\widehat{\tau}$, and in simple designs the closed form
+gives the same power as simulation. The two differ in three
+situations: when other attributes have sizeable effects and when
+respondents are few, both common in practice, and when the requested
+effects describe no possible population.
 
-negative <- cjpowR::cjpowr_amce(amce = -0.10, n = 2000, levels = 3, sims = 0)
-negative$type_s                       # 0.9999999906
-se <- sqrt((0.55 * 0.45 + 0.45 * 0.55) / (2000 / 3))
-pnorm(-abs(-0.10) / se - qnorm(0.975)) / negative$power  # 9.430218e-09
+The first situation arises because respondents weigh all attributes at
+once when decising which profile to choose. Since the other attributes are randomized independently of the
+focal one, conditioning on them leaves the estimand unchanged but
+absorbs part of the variation in choices, reducing the sampling
+variance of the estimated AMCE, just as regression adjustment for
+pre-treatment covariates does in a randomized experiment (Lin 2013).
+The closed form estimator makes no such adjustment. Its variance,
+$V$, does not depend on the other attributes' effects, so the it
+understates power and yields conservative sample sizes[^sigma]. 
 
-negative_sim <- cjsimPWR::power_sim(
-  levels = 3, true_amce = list(c(-0.10, 0)), units = 1000, n_tasks = 1,
-  sim_runs = 1000, seed = 1
-)
-negative_sim$performance[1, c("type_s", "analytic_type_s", "n_sig")]
-```
+[^sigma]: This gain in precision shrinks as respondents differ more.
+The other attributes reduce the measurement noise within each
+respondent, the first term of $V$, but not the differences between
+respondents, the second term, whose share of $V$ grows with
+$\sigma$.
 
-## References
+The second situation concerns the test. The closed form treats the
+standard error as known and normal critical values as exact, so it
+assumes that the test rejects a true null exactly $\alpha$ of the
+time and that 95 percent confidence intervals contain the true AMCE
+95 percent of the time. With few respondents or small subgroups that estimate is
+noisy and tends to be too small, and normal critical values are too
+permissive --- the small-sample problems motivating the corrections in
+[Pustejovsky and Tipton (2018)]
+(https://doi.org/10.1080/07350015.2016.1247004). More tasks do not
+help, because they add choices, not respondents, and the problem
+arises even when all respondents share the same AMCE. 
 
-Hainmueller, J., Hopkins, D. J., & Yamamoto, T. (2014). Causal inference in conjoint analysis:
-Understanding multidimensional choices via stated preference experiments. *Political Analysis*,
-22(1), 1–30.
+The third situation concerns the effects themselves. An AMCE is a
+difference between two choice probabilities, so it cannot be
+arbitrarily large: in a paired design, no respondent's AMCE can
+exceed $1 - 1/L$ in size, however strong the respondent's preference.
+Take the most extreme gender respondent, who always picks the man
+when the candidates differ. That respondent's AMCE is only 0.5,
+because in half the tasks both candidates are men or both are women,
+and in those tasks the choice cannot favour either gender.[^extreme]
 
-Pustejovsky, J. E., & Tipton, E. (2018). Small-sample methods for cluster-robust variance estimation and
-hypothesis testing in fixed effects models. *Journal of Business & Economic Statistics*, 36(4), 672–683.
-<https://doi.org/10.1080/07350015.2016.1247004>
+[^extreme]: In general, the level of interest can be chosen in at most
+$1 - 1/(2L)$ of the profiles that show it, and the reference level in
+no fewer than $1/(2L)$, because whenever both profiles show the same
+level, one of them is chosen. For gender, take 1,000 tasks. Of the
+1,000 profiles showing a man, the extreme respondent chooses 750, all
+500 against a woman plus one in each of the 250 tasks with two men;
+of the 1,000 showing a woman, only 250, one in each task with two
+women. The AMCE is $0.75 - 0.25 = 0.5 = 1 - 1/L$.
 
-Robinson, T. S., & Duch, R. M. (2024). How to detect heterogeneity in conjoint experiments. *The Journal
-of Politics*, 86(2), 412–427. <https://doi.org/10.1086/727597>
+The same applies to several effects requested together: each can be
+possible on its own but impossible in combination.[^joint] The closed
+form looks at one effect at a time. The simulation, instead, has to build actual
+respondents whose choices produce all the requested effects at once,
+so it notices when no such population exists and stops.
 
-Schuessler, J., & Freitag, M. (2020). Power analysis for conjoint experiments. SocArXiv.
-<https://doi.org/10.31235/osf.io/9yuhp>
+[^joint]: Across the levels of an attribute, profiles are chosen half
+the time on average, so raising some levels' choice rates lowers the
+others'. For a three-level attribute, AMCEs of 0.6 for each
+non-reference level are each possible on their own, since 0.6 is
+below $1 - 1/3 \approx 0.67$. Together, they would require the
+reference level to be chosen in only 10 percent of the profiles that
+show it, below the minimum of one in six set by the tasks in which
+both profiles show it.
+
