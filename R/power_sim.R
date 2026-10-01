@@ -15,13 +15,11 @@
 #'   at most `sim_runs` workers are started. No global future plan or options are changed.
 #' @param keep_runs Retain the estimates, inference and failure reasons from every run? Default FALSE.
 #' @param n_levels,group_name,true_coef Deprecated aliases for `levels`, `groups`, and `true_amce`,
-#'   kept for backward compatibility with a warning on use. The default DGP is now calibrated logit;
-#'   select `dgp = "odds"` explicitly to interpret `true_coef` as legacy score coefficients.
+#'   kept for backward compatibility with a warning on use. `true_coef` is interpreted as AMCE targets
+#'   for the calibrated logit model, not the score coefficients of versions up to 0.2.1.
 #' @param sigma.u_k Deprecated alias. In versions up to 0.2.1 it was the SD of respondent-level
-#'   effects on the probability scale, so with the calibrated models it is used as `sigma`. With
-#'   `dgp = "odds"` it is used as `latent_sigma`, reproducing only that legacy parameter's
-#'   interpretation; profile pairs are always drawn independently now (see NEWS), so `dgp = "odds"`
-#'   does not reproduce a 0.2.1 experiment's results exactly.
+#'   effects on the probability scale, so it is used as `sigma`. Profile pairs are always drawn
+#'   independently now (see NEWS); this alias does not reproduce a 0.2.1 experiment's results exactly.
 #' @param n_attributes Deprecated attribute count, checked against `levels` when supplied. See NEWS
 #'   for the full migration table covering every deprecated argument.
 #'
@@ -34,14 +32,12 @@
 #' @section Interpreting results: Bias and coverage use `true_amce`, the numerical reference for the
 #'   generated population AMCE, with its uncertainty retained. Calibrated effects match
 #'   `requested_amce` within `tolerance`, rather than necessarily equalling it. Null classification
-#'   uses `requested_amce == 0`, or `true_amce == 0` when the requested AMCE is unavailable (the
-#'   deprecated odds model uses scores). A single-group requested zero is exact in the calibrated
-#'   models. Differences are exact for shared populations, the linear model or levels that are zero
-#'   in both groups.
+#'   uses `requested_amce == 0`. A requested zero within a group is exact. Differences are exact for
+#'   shared populations or levels that are zero in both groups.
 #'   Separately calibrated groups with equal nonzero requests generally produce a small residual
 #'   contrast: their Type I error is approximate.
 #'   `target_error_bound = abs(true_amce - requested_amce) + reference_half_width` is a nominal 99%
-#'   simultaneous reference confidence bound, not a deterministic guarantee; it is NA for odds inputs.
+#'   simultaneous reference confidence bound, not a deterministic guarantee.
 #'   Type I error is printed with its Monte Carlo standard error only for null targets, not
 #'   for nonsignificant estimates of nonzero effects. The column is omitted when no Type I error
 #'   estimates are available. To check an effect's false-positive rate, rerun with that effect set
@@ -107,7 +103,7 @@
 #'   units = c(Z = 100, A = 80), n_tasks = 3, sim_runs = 20, seed = 42, keep_runs = TRUE)
 #' subset(by_group$performance, type == "difference")
 power_sim <- function(levels = NULL, true_amce = NULL, units, n_tasks, groups = NULL, sigma = 0,
-                      dgp = c("logit", "linear", "odds"),
+                      dgp = "logit",
                       alpha = 0.05, vcov = c("CR1", "CR2"), sim_runs = 1000, seed, cores = 1,
                       inference = NULL, latent_sigma = NULL, calibration_control = list(),
                       keep_runs = FALSE, n_levels = NULL, group_name = NULL, true_coef = NULL,
@@ -122,23 +118,15 @@ power_sim <- function(levels = NULL, true_amce = NULL, units, n_tasks, groups = 
   }
   if (!missing(true_coef)) {
     deprecated_power_arg("true_coef", "true_amce", !missing(true_amce),
-      "The default DGP is calibrated logit; use dgp = \"odds\" for legacy scores.")
+      "Values are AMCE targets for the calibrated logit model, not the score coefficients of versions up to 0.2.1.")
     true_amce <- true_coef
   }
-  dgp <- match.arg(dgp)
   if (!missing(sigma.u_k)) {
     conflict <- !missing(sigma) || !missing(latent_sigma)
-    if (dgp == "odds") {
-      deprecated_power_arg("sigma.u_k", "latent_sigma", conflict,
-        "With dgp = \"odds\" it is the score-scale SD of versions up to 0.2.1.")
-      latent_sigma <- sigma.u_k
-    } else {
-      # In the old model, score coefficients were probability effects, so the old sigma.u_k was the SD
-      # of respondent-level AMCEs: the closest current argument is the AMCE-scale sigma.
-      deprecated_power_arg("sigma.u_k", "sigma", conflict,
-        "It is used as the SD of respondent-level AMCEs on the probability scale, as in versions up to 0.2.1.")
-      sigma <- sigma.u_k
-    }
+    # Both arguments denote the SD of respondent-level AMCEs on the probability scale.
+    deprecated_power_arg("sigma.u_k", "sigma", conflict,
+      "It is used as the SD of respondent-level AMCEs on the probability scale, as in versions up to 0.2.1.")
+    sigma <- sigma.u_k
   }
   design <- conjoint_design(levels)
   if (!missing(n_attributes)) {
@@ -185,7 +173,7 @@ power_sim <- function(levels = NULL, true_amce = NULL, units, n_tasks, groups = 
   performance <- do.call(rbind, lapply(truth$effect_id, function(id) {
     rows <- runs[runs$effect_id == id, ]
     summarise_runs(rows$estimate, rows$std.error, truth$true_amce[id], alpha, rows$df,
-      null = if (is.na(truth$requested_amce[id])) truth$true_amce[id] == 0 else truth$requested_amce[id] == 0,
+      null = truth$requested_amce[id] == 0,
       reference_mcse = truth$reference_mcse[id], reference_half_width = truth$reference_half_width[id])
   }))
   performance <- data.frame(truth, vcov = vcov, inference = inference, performance, row.names = NULL)
@@ -193,7 +181,7 @@ power_sim <- function(levels = NULL, true_amce = NULL, units, n_tasks, groups = 
   class(performance) <- c("cj_performance", "data.frame")
   failures <- power_failures(runs, truth)
   settings <- list(design = design, units = units, n_tasks = n_tasks, groups = groups,
-                   sigma = sigma, latent_sigma = latent_sigma, dgp = dgp, alpha = alpha,
+                   sigma = sigma, latent_sigma = latent_sigma, dgp = model$dgp, alpha = alpha,
                    vcov = vcov, inference = inference, sim_runs = sim_runs, seed = seed,
                    cores = cores, workers = workers, keep_runs = keep_runs,
                    calibration_control = model$control, rng = c("L'Ecuyer-CMRG", "Inversion", "Rejection"))
@@ -258,7 +246,7 @@ match_effect_rows <- function(template, data) {
 # workers. This bounded environment contains only sampling/estimation functions and the prepared model.
 power_worker <- function(model, units, n_tasks, vcov, inference, alpha) {
   env <- new.env(parent = baseenv())
-  functions <- c("simulate_experiment", "sample_tasks", "draw_profiles", "profile_scores", "odds_choice",
+  functions <- c("simulate_experiment", "sample_tasks", "draw_profiles", "profile_scores",
                  "check_groups", "per_group", "estimate_amce", "amce_model_data", "check_inference",
                  "match_effect_rows")
   for (nm in functions) {

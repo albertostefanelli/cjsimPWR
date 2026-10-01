@@ -25,11 +25,10 @@ Jump to: [reading the output](#reading-the-output), [checking an effect](#checki
 `power_sim()` classifies a row as a null target when `requested_amce == 0` — using the requested **contrast** for a difference row. Null targets populate `type_1_error`; non-null targets populate `power`. The default printout includes Type I error with its MCSE when available and
 omits entirely unavailable measure columns.
 
-An individual zero AMCE is exact in the logit and linear models, as are zero differences in the linear
-model, shared populations and levels that are zero in both groups. Equal nonzero requests in otherwise
-different logit populations can leave a small residual contrast after separate calibration, so their
-reported Type I error is approximate. Bias and coverage still use the generated-effect reference
-`true_amce`.
+An individual zero AMCE is exact, as are zero differences for shared populations and levels that are
+zero in both groups. Equal nonzero requests in otherwise different populations can leave a small
+residual contrast after separate calibration, so their reported Type I error is approximate. Bias and
+coverage still use the generated-effect reference `true_amce`.
 
 `true_amce` is the package's numerical reference for the AMCE actually generated in the simulated
 population, not necessarily identical to the requested value. Bias and coverage are measured against it,
@@ -133,8 +132,7 @@ planned procedure; inspect `$failures` alongside the percentages.
 For any row with a requested AMCE, `target_error_bound = abs(true_amce - requested_amce) + reference_half_width`.
 If the reference interval contains the generated effect, this bounds the remaining departure from the
 requested value at a nominal 99% Monte Carlo confidence — not a strict guarantee, and not the effect's
-standard error in a simulated experiment. Odds inputs have no requested AMCE, so the bound is `NA`. How
-this bound combines across separately calibrated groups is in the
+standard error in a simulated experiment. How this bound combines across separately calibrated groups is in the
 [calibration guide](calibration.md#5-bounds-and-sensitivity).
 
 The `power_sim()` help ("Interpreting results") defines the internal normal-benchmark check and its

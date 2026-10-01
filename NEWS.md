@@ -7,19 +7,17 @@ below.
 
 ## Simulation model
 
-* Choices come from a logit model calibrated so that the population AMCEs match the requested ones,
-  instead of a rule that clipped the odds. In 0.2.1, requested score coefficients of 0.10 and 0.20 gave
-  generated AMCEs of about 0.106 and 0.209 for two binary attributes; reproduce with
-  `dgp = "odds"`, e.g. `simulate_experiment(conjoint_design(c(2, 2)), list(0.10, 0.20), units = 2000,
-  n_tasks = 1, dgp = "odds")`, and inspect `attr(data, "dgp")$truth$true_amce`.
+* Choices come from a logit model calibrated so that the population AMCEs match the requested ones.
+  Under the earlier choice rule, score coefficients of 0.10 and 0.20 gave generated AMCEs of about
+  0.106 and 0.209 for two binary attributes, with both profiles drawn independently.
+* `dgp = "logit"` names the choice model. The argument is retained so that later versions can add
+  other choice models without changing existing calls.
 * Both profiles of a task are always drawn independently, as in a fully randomized design. Version
   0.2.1 removed identical pairs, which inflated the estimator's target by M/(M - 1), where M is the
   number of possible profiles.
 * `sigma` is the standard deviation of respondent-level AMCEs on the probability scale. Levels with
   a requested AMCE of zero stay zero in the population; individual effects can vary. `latent_sigma`
   is available for users who think on the coefficient scale.
-* `dgp = "linear"` gives exact AMCEs without heterogeneity; `dgp = "odds"` keeps the 0.2.1 choice
-  rule for comparison and is deprecated.
 * Any number of attributes is supported, with names and level labels. In 0.2.1, designs with ten or
   more attributes attached effects to the wrong attributes (`var_10` was read before `var_2`).
 * Subgroup coefficients are matched to groups by name. In 0.2.1 they were assigned by alphabetical
@@ -32,9 +30,6 @@ below.
   guaranteeing confirmation. See the
   [calibration guide](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/calibration.md) for
   the full mechanics, diagnostic fields and schema.
-* The deprecated odds model has score inputs rather than AMCE targets, so its verification checks
-  numerical precision only, retrying with larger samples up to a fixed attempt budget; exhausting it
-  gives a specific error.
 
 ## Estimation and inference
 
@@ -52,8 +47,7 @@ below.
 ## Performance measures
 
 * The default printout includes Type I error and its Monte Carlo standard error for null targets.
-  Non-null targets report power. All null targets omit empirical and analytic Type S/M. Odds models
-  identify nulls from their calculated AMCEs.
+  Non-null targets report power. All null targets omit empirical and analytic Type S/M.
 * Bias, coverage and Type S/M are computed against the numerically calculated population AMCE
   (`true_amce`). `bias_mcse` includes the uncertainty of that reference; coverage MCSE is conditional on
   it, and `coverage_reference_lower` and `coverage_reference_upper` show how much it could matter.
@@ -87,10 +81,10 @@ below.
   | Deprecated | Replacement | Notes |
   | --- | --- | --- |
   | `n_levels` | `levels` | |
-  | `true_coef` | `true_amce` | Default DGP is now calibrated logit; use `dgp = "odds"` to interpret it as legacy score coefficients. |
+  | `true_coef` | `true_amce` | Values are interpreted as AMCE targets for the calibrated logit model. |
   | `group_name` | `groups` | |
   | `n_attributes` | (checked against `levels`) | |
-  | `sigma.u_k` | `sigma` (default DGP), or `latent_sigma` with `dgp = "odds"` | Reproduces only that legacy parameter's interpretation, not a full 0.2.1 experiment: profile pairs are always drawn independently now (see "Simulation model" above). |
+  | `sigma.u_k` | `sigma` | SD of respondent-level AMCEs on the probability scale; profile pairs are always drawn independently now (see "Simulation model" above). |
 * `power_sim()` returns a `cj_power` list with `performance`, `truth`, `parameters`, `diagnostics`,
   `settings`, `failures`, optional `runs` and the calibrated `model`.
 * New exported building blocks: `conjoint_design()`, `simulate_experiment()`, `estimate_amce()` and

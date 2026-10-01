@@ -11,7 +11,7 @@ power_sim(
   n_tasks,
   groups = NULL,
   sigma = 0,
-  dgp = c("logit", "linear", "odds"),
+  dgp = "logit",
   alpha = 0.05,
   vcov = c("CR1", "CR2"),
   sim_runs = 1000,
@@ -57,18 +57,15 @@ by name, retaining this order. A single group has AMCEs without differences.}
 \item{sigma}{heterogeneity of preferences: a single non-negative number, the standard deviation,
 across respondents, of each respondent's own AMCE, on the probability scale (\code{sigma = 0.05} means
 individual AMCEs spread with SD 0.05 around the requested AMCE). One call takes one \code{sigma}, shared
-across effects and groups; it does not accept a vector. Available for the logit model; the linear
-model requires \code{sigma = 0}. A requested zero AMCE stays zero in the population; individual
-respondents can still have positive or negative effects under heterogeneity.
+across effects and groups; it does not accept a vector. A requested zero AMCE stays zero in the
+population; individual respondents can still have positive or negative effects under heterogeneity.
 There is no generally valid value: use pilot evidence where available, otherwise compare separate
 calls at labelled candidate values (for example, 0, 0.05, 0.10 and 0.15) with the requested AMCEs
 held fixed.}
 
-\item{dgp}{choice model: \code{"logit"} (default), calibrated so that generated AMCEs match \code{true_amce}
-within the calibration tolerance;
-\code{"linear"}, where the AMCEs equal \code{true_amce} exactly but no heterogeneity is possible; or
-\code{"odds"}, the deprecated model of versions up to 0.2.1, whose inputs are score coefficients rather
-than AMCEs.}
+\item{dgp}{choice model: \code{"logit"} (the default), calibrated so that generated AMCEs match
+\code{true_amce} within the calibration tolerance. The argument is retained so that later versions can
+add other choice models without changing existing calls.}
 
 \item{alpha}{Significance level for two-sided confidence intervals and tests of zero.}
 
@@ -90,9 +87,8 @@ at most \code{sim_runs} workers are started. No global future plan or options ar
 NULL chooses normal for CR1 and Satterthwaite for CR2. The G-1 approximation can be poor for
 small subgroups, even if the joint fit has many respondents.}
 
-\item{latent_sigma}{alternative to \code{sigma}: the SD of respondent-level deviations on the model's
-coefficient scale. With \code{"odds"} it reproduces the old \code{sigma.u_k}. The implied AMCE SDs are
-reported in the model's \code{truth} table.}
+\item{latent_sigma}{alternative to \code{sigma}: the SD of respondent-level deviations on the logit
+coefficient scale. The implied AMCE SDs are reported in the model's \code{truth} table.}
 
 \item{calibration_control}{optional named list of calibration settings; see the Calibration section
 of \code{\link[=simulate_experiment]{simulate_experiment()}} below. \code{reference_margin = 0.5} enables experimental precision planning;
@@ -101,14 +97,12 @@ its default of zero retains the original calibration and reference budgets.}
 \item{keep_runs}{Retain the estimates, inference and failure reasons from every run? Default FALSE.}
 
 \item{n_levels, group_name, true_coef}{Deprecated aliases for \code{levels}, \code{groups}, and \code{true_amce},
-kept for backward compatibility with a warning on use. The default DGP is now calibrated logit;
-select \code{dgp = "odds"} explicitly to interpret \code{true_coef} as legacy score coefficients.}
+kept for backward compatibility with a warning on use. \code{true_coef} is interpreted as AMCE targets
+for the calibrated logit model, not the score coefficients of versions up to 0.2.1.}
 
 \item{sigma.u_k}{Deprecated alias. In versions up to 0.2.1 it was the SD of respondent-level
-effects on the probability scale, so with the calibrated models it is used as \code{sigma}. With
-\code{dgp = "odds"} it is used as \code{latent_sigma}, reproducing only that legacy parameter's
-interpretation; profile pairs are always drawn independently now (see NEWS), so \code{dgp = "odds"}
-does not reproduce a 0.2.1 experiment's results exactly.}
+effects on the probability scale, so it is used as \code{sigma}. Profile pairs are always drawn
+independently now (see NEWS); this alias does not reproduce a 0.2.1 experiment's results exactly.}
 
 \item{n_attributes}{Deprecated attribute count, checked against \code{levels} when supplied. See NEWS
 for the full migration table covering every deprecated argument.}
@@ -146,14 +140,12 @@ including its normal-generator kind, is restored after the call.
  Bias and coverage use \code{true_amce}, the numerical reference for the
 generated population AMCE, with its uncertainty retained. Calibrated effects match
 \code{requested_amce} within \code{tolerance}, rather than necessarily equalling it. Null classification
-uses \code{requested_amce == 0}, or \code{true_amce == 0} when the requested AMCE is unavailable (the
-deprecated odds model uses scores). A single-group requested zero is exact in the calibrated
-models. Differences are exact for shared populations, the linear model or levels that are zero
-in both groups.
+uses \code{requested_amce == 0}. A requested zero within a group is exact. Differences are exact for
+shared populations or levels that are zero in both groups.
 Separately calibrated groups with equal nonzero requests generally produce a small residual
 contrast: their Type I error is approximate.
 \code{target_error_bound = abs(true_amce - requested_amce) + reference_half_width} is a nominal 99\%
-simultaneous reference confidence bound, not a deterministic guarantee; it is NA for odds inputs.
+simultaneous reference confidence bound, not a deterministic guarantee.
 Type I error is printed with its Monte Carlo standard error only for null targets, not
 for nonsignificant estimates of nonzero effects. The column is omitted when no Type I error
 estimates are available. To check an effect's false-positive rate, rerun with that effect set

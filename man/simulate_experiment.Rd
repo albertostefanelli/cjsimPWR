@@ -11,7 +11,7 @@ simulate_experiment(
   n_tasks,
   groups = NULL,
   sigma = 0,
-  dgp = c("logit", "linear", "odds"),
+  dgp = "logit",
   latent_sigma = NULL,
   model = NULL,
   calibration_control = list()
@@ -36,22 +36,18 @@ one per group, matched by name when named and by group order otherwise.}
 \item{sigma}{heterogeneity of preferences: a single non-negative number, the standard deviation,
 across respondents, of each respondent's own AMCE, on the probability scale (\code{sigma = 0.05} means
 individual AMCEs spread with SD 0.05 around the requested AMCE). One call takes one \code{sigma}, shared
-across effects and groups; it does not accept a vector. Available for the logit model; the linear
-model requires \code{sigma = 0}. A requested zero AMCE stays zero in the population; individual
-respondents can still have positive or negative effects under heterogeneity.
+across effects and groups; it does not accept a vector. A requested zero AMCE stays zero in the
+population; individual respondents can still have positive or negative effects under heterogeneity.
 There is no generally valid value: use pilot evidence where available, otherwise compare separate
 calls at labelled candidate values (for example, 0, 0.05, 0.10 and 0.15) with the requested AMCEs
 held fixed.}
 
-\item{dgp}{choice model: \code{"logit"} (default), calibrated so that generated AMCEs match \code{true_amce}
-within the calibration tolerance;
-\code{"linear"}, where the AMCEs equal \code{true_amce} exactly but no heterogeneity is possible; or
-\code{"odds"}, the deprecated model of versions up to 0.2.1, whose inputs are score coefficients rather
-than AMCEs.}
+\item{dgp}{choice model: \code{"logit"} (the default), calibrated so that generated AMCEs match
+\code{true_amce} within the calibration tolerance. The argument is retained so that later versions can
+add other choice models without changing existing calls.}
 
-\item{latent_sigma}{alternative to \code{sigma}: the SD of respondent-level deviations on the model's
-coefficient scale. With \code{"odds"} it reproduces the old \code{sigma.u_k}. The implied AMCE SDs are
-reported in the model's \code{truth} table.}
+\item{latent_sigma}{alternative to \code{sigma}: the SD of respondent-level deviations on the logit
+coefficient scale. The implied AMCE SDs are reported in the model's \code{truth} table.}
 
 \item{model}{optional prepared \code{cj_dgp} object, from a previous simulation's \code{dgp} attribute or
 \code{\link[=power_sim]{power_sim()}}'s \code{model}, for repeated experiments without recalibration.
@@ -84,7 +80,7 @@ experiment itself (the returned profile rows) advances it.
 Draws the tasks of a paired conjoint experiment and simulates each respondent's choices.
 }
 \section{Calibration}{
- For the logit model the package solves for coefficients whose AMCEs approximate
+ The package solves for coefficients whose AMCEs approximate
 \code{true_amce} (and, with \code{sigma > 0}, whose respondent-level AMCEs have SD \code{sigma}), then verifies the
 solution against fresh reference draws at a nominal 99\% Monte Carlo confidence. Verification stops
 when every true AMCE is within \code{tolerance} of its request and every AMCE SD is within
@@ -131,16 +127,9 @@ positive value (suggested starting point 0.5) can increase calibration runtime o
 verification to fail. \code{max_reference_batches} caps the final budget per group.
 \code{diagnostics[[g]]$reference_plan} reports \code{batches}, \code{cap_limited}, \code{predicted_precision_met} and
 realised \code{precision_met}. A batch cap or a missed precision target alone does not raise a warning,
-and meeting the target is not guaranteed. This option requires AMCE targets and is unavailable for
-the legacy odds model; see the \href{https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/calibration.md}{calibration guide}
+and meeting the target is not guaranteed. See the
+\href{https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/calibration.md}{calibration guide}
 (online) for the full derivation and reading guide.
-
-The deprecated odds model has fixed scores rather than AMCE/SD targets, so verification checks
-numerical precision only: each retry doubles \code{verification_pairs} and \code{verification_draws}, up to
-\code{max_attempts}, without changing the tolerance. Exhausting this budget stops with a reference
-precision error. Its final \code{accepted} flag records precision only; \code{contradicted} is always FALSE,
-since there are no AMCE/SD targets to test. The separate null-sensitivity warning in \code{\link[=power_sim]{power_sim()}}
-is unchanged.
 }
 
 \examples{

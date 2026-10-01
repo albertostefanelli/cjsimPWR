@@ -81,8 +81,8 @@ reference_dummies <- function(codes, n_levels) {
 }
 
 # Under independent uniform randomization, AMCE = Cov(Z)^-1 E[(Z1-Z2)(P1-.5)]/2.
-# Exact small-design enumeration and the MC oracle use the same identity. MC uses a linear
-# control variate with known expectation (beta/4 for logit; beta for the legacy odds rule).
+# Exact small-design enumeration and the MC oracle use the same identity. MC uses a
+# control variate with known expectation beta/4 to reduce profile-integration error.
 profile_reference <- function(n_levels, pairs, exact_max_pairs) {
   exact <- 2 * sum(log(n_levels)) <= log(exact_max_pairs)
   if (exact) {
@@ -102,22 +102,20 @@ profile_reference <- function(n_levels, pairs, exact_max_pairs) {
     j <- blocks[[k]]
     weights[, j] <- (delta[, j, drop = FALSE] + rowSums(delta[, j, drop = FALSE])) * n_levels[k] / 2
   }
-  list(delta = delta, z1 = z1, z2 = z2, weights = weights / nrow(delta), exact = exact,
+  list(delta = delta, weights = weights / nrow(delta), exact = exact,
        pairs = nrow(delta))
 }
 
 # Conditional AMCEs for each respondent coefficient vector, integrating over profile randomization.
-conditional_amces <- function(beta, reference, dgp) {
+conditional_amces <- function(beta, reference) {
   beta <- as.matrix(beta)
   result <- matrix(0, nrow(beta), ncol(beta))
   blocks <- split(seq_len(nrow(beta)), ceiling(seq_len(nrow(beta)) / 128L))
-  slope <- if (dgp == "logit") 0.25 else 1
+  slope <- 0.25
   for (rows in blocks) {
     b <- beta[rows, , drop = FALSE]
     eta <- reference$delta %*% t(b)
-    prob <- if (dgp == "logit") stats::plogis(eta) else {
-      odds_choice(reference$z1 %*% t(b), reference$z2 %*% t(b))
-    }
+    prob <- stats::plogis(eta)
     if (reference$exact) {
       result[rows, ] <- t(crossprod(reference$weights, prob - 0.5))
     } else {
@@ -137,9 +135,9 @@ reference_sample <- function(n_levels, control, pairs, draws, heterogeneous) {
   list(ref = ref, ref2 = ref2, U = U, attribute = rep(seq_along(n_levels), n_levels - 1))
 }
 
-reference_moments <- function(gamma, latent_sd, sample, dgp, baseline_sd = NULL) {
+reference_moments <- function(gamma, latent_sd, sample, baseline_sd = NULL) {
   if (all(latent_sd == 0)) {
-    value <- as.numeric(conditional_amces(matrix(gamma, 1), sample$ref, dgp))
+    value <- as.numeric(conditional_amces(matrix(gamma, 1), sample$ref))
     return(list(mean = value, second = value^2, sd = rep(0, length(value))))
   }
   U <- rbind(sample$U, -sample$U)
@@ -148,8 +146,8 @@ reference_moments <- function(gamma, latent_sd, sample, dgp, baseline_sd = NULL)
   if (!is.null(baseline_sd)) {
     beta <- beta - sweep(U[, q + sample$attribute, drop = FALSE], 2, baseline_sd[sample$attribute], "*")
   }
-  a <- conditional_amces(beta, sample$ref, dgp)
-  b <- if (is.null(sample$ref2)) a else conditional_amces(beta, sample$ref2, dgp)
+  a <- conditional_amces(beta, sample$ref)
+  b <- if (is.null(sample$ref2)) a else conditional_amces(beta, sample$ref2)
   mu <- colMeans((a + b) / 2)
   second <- colMeans(a * b)
   list(mean = mu, second = second, sd = sqrt(pmax(0, second - mu^2)))
@@ -198,17 +196,17 @@ solve_amce_moments <- function(fn, x, tolerance, maxit) {
 # Independent batches include both profile integration error and coefficient-draw uncertainty.
 # Verification bounds account for every effect, SD, calibration attempt and verification look.
 # A fixed-budget final reference has just one look and is never used to select the model.
-verify_dgp <- function(gamma, latent_sd, n_levels, dgp, control, target = NULL, sigma = NULL,
+verify_dgp <- function(gamma, latent_sd, n_levels, control, target, sigma = 0,
                        structural_zero = rep(FALSE, length(gamma)), baseline_sd = NULL,
                        fixed_batches = NULL, acceptance_margin = 0) {
   heterogeneous <- any(latent_sd > 0)
   exact <- 2 * sum(log(n_levels)) <= log(control$exact_max_pairs)
   if (exact && !heterogeneous) {
     sample <- reference_sample(n_levels, control, 1, 2, FALSE)
-    moments <- reference_moments(gamma, latent_sd, sample, dgp)
+    moments <- reference_moments(gamma, latent_sd, sample)
     return(c(moments, list(mcse = rep(0, length(gamma)), sd_mcse = rep(0, length(gamma)),
                           half_width = rep(0, length(gamma)), sd_half_width = rep(0, length(gamma)),
-                          accepted = is.null(target) || max(abs(moments$mean - target)) <=
+                          accepted = max(abs(moments$mean - target)) <=
                             (1 - acceptance_margin) * control$tolerance,
                           batches = 0L, draws = 0L, pairs = sample$ref$pairs, method = "exact")))
   }
@@ -223,7 +221,7 @@ verify_dgp <- function(gamma, latent_sd, n_levels, dgp, control, target = NULL, 
   for (batch in seq_len(batches)) {
     sample <- reference_sample(n_levels, control, control$verification_pairs,
                                control$verification_draws, heterogeneous)
-    moment <- reference_moments(gamma, latent_sd, sample, dgp, baseline_sd)
+    moment <- reference_moments(gamma, latent_sd, sample, baseline_sd)
     means[batch, ] <- moment$mean; seconds[batch, ] <- moment$second
     if (!batch %in% looks) next
     mu <- colMeans(means[seq_len(batch), , drop = FALSE])
@@ -239,10 +237,8 @@ verify_dgp <- function(gamma, latent_sd, n_levels, dgp, control, target = NULL, 
     }
     critical <- stats::qt(1 - 0.01 / (2 * comparisons), batch - 1)
     width <- critical * mcse; sd_width <- critical * sd_mcse
-    accepted <- if (is.null(target)) all(width <= control$tolerance) else {
-      all(abs(mu - target) + width <= (1 - acceptance_margin) * control$tolerance)
-    }
-    if (!is.null(sigma) && sigma > 0) {
+    accepted <- all(abs(mu - target) + width <= (1 - acceptance_margin) * control$tolerance)
+    if (sigma > 0) {
       accepted <- accepted && all(abs(sd - sigma) + sd_width <=
                                    (1 - acceptance_margin) * min(0.005, 0.05 * sigma))
     }
@@ -255,10 +251,10 @@ verify_dgp <- function(gamma, latent_sd, n_levels, dgp, control, target = NULL, 
 }
 
 # Failure to confirm containment is inconclusive unless an interval is disjoint from the band.
-# Legacy odds inputs have no AMCE or AMCE-SD target to contradict.
-reference_contradicted <- function(reference, target = NULL, sigma = NULL, tolerance) {
-  amce <- !is.null(target) && any(abs(reference$mean - target) - reference$half_width > tolerance)
-  sd <- !is.null(sigma) && sigma > 0 &&
+# SDs are tested only when `sigma > 0`: a fixed `latent_sigma` is not an AMCE-SD target.
+reference_contradicted <- function(reference, target, sigma, tolerance) {
+  amce <- any(abs(reference$mean - target) - reference$half_width > tolerance)
+  sd <- sigma > 0 &&
     any(abs(reference$sd - sigma) - reference$sd_half_width > min(0.005, 0.05 * sigma))
   amce || sd
 }
@@ -316,20 +312,20 @@ record_reference_precision <- function(plan, reference) {
   plan
 }
 
-prepare_dgp <- function(design, true_amce, groups = NULL, sigma = 0, dgp = c("logit", "linear", "odds"),
+prepare_dgp <- function(design, true_amce, groups = NULL, sigma = 0, dgp = "logit",
                         latent_sigma = NULL, control = list()) {
   if (!inherits(design, "cj_design")) stop("`design` must be created with conjoint_design().", call. = FALSE)
   groups <- check_groups(groups)
   target <- amce_matrix(true_amce, design, groups)
-  dgp <- match.arg(dgp)
+  if (!is.character(dgp) || length(dgp) != 1L || is.na(dgp) || dgp != "logit") {
+    stop("`dgp` must be \"logit\".", call. = FALSE)
+  }
+  dgp <- "logit"
   scalar_sd <- function(x) is.numeric(x) && length(x) == 1 && is.finite(x) && x >= 0
   if (!scalar_sd(sigma)) stop("`sigma` must be a single non-negative number.", call. = FALSE)
   if (!is.null(latent_sigma) && !scalar_sd(latent_sigma)) stop("`latent_sigma` must be a single non-negative number.", call. = FALSE)
   if (!is.null(latent_sigma) && sigma != 0) stop("supply AMCE-scale `sigma` or `latent_sigma`, not both.", call. = FALSE)
   control <- dgp_controls(control)
-  if (dgp == "odds" && control$reference_margin > 0) {
-    stop("reference_margin requires AMCE targets and is not available for the legacy odds model.", call. = FALSE)
-  }
   meta <- effect_metadata(design)
   p <- nrow(meta)
   n_groups <- nrow(target)
@@ -341,13 +337,6 @@ prepare_dgp <- function(design, true_amce, groups = NULL, sigma = 0, dgp = c("lo
   group_control <- control
   group_control$comparisons_multiplier <- n_groups
   if (n_groups > 1) group_control$tolerance <- control$tolerance / 2
-  if (dgp == "linear" && (sigma != 0 || (!is.null(latent_sigma) && latent_sigma != 0))) {
-    stop("the linear DGP requires `sigma = 0`; unbounded Gaussian heterogeneity cannot guarantee valid probabilities.", call. = FALSE)
-  }
-  if (dgp == "odds") {
-    if (sigma != 0) stop("legacy odds heterogeneity uses `latent_sigma`; `sigma` always denotes AMCE-scale SD.", call. = FALSE)
-    warning("`dgp = \"odds\"` is deprecated: input values are legacy score coefficients, not AMCE targets.", call. = FALSE)
-  }
   for (g in seq_len(n_groups)) {
     requested <- target[g, ]
     previous <- which(vapply(seq_len(g - 1L), function(i) identical(target[i, ], requested), logical(1)))
@@ -358,17 +347,9 @@ prepare_dgp <- function(design, true_amce, groups = NULL, sigma = 0, dgp = c("lo
       raw_sd[g, ] <- raw_sd[i, ]; baseline_sd[g, ] <- baseline_sd[i, ]
       diagnostics[[g]] <- diagnostics[[i]]
       reference <- diagnostics[[g]]$reference
-    } else if (dgp == "linear") {
-      ranges <- vapply(split(requested, meta$attribute_index), function(x) diff(range(c(0, x))), numeric(1))
-      if (sum(ranges) > 0.5) stop("infeasible linear AMCEs: attribute ranges (including zero) must sum to at most 0.5.", call. = FALSE)
-      gamma[g, ] <- requested
-      reference <- list(mean = requested, sd = rep(0, p), mcse = rep(0, p), sd_mcse = rep(0, p),
-                        half_width = rep(0, p), sd_half_width = rep(0, p), method = "exact linear",
-                        accepted = TRUE, contradicted = FALSE, batches = 0L, draws = 0L, pairs = 0L)
-      diagnostics[[g]] <- list(converged = TRUE, iterations = 0L, max_residual = 0, reference = reference)
     } else {
       fitted <- with_reference_seed(control$seed + g - 1L,
-        calibrate_dgp_group(design, requested, sigma, dgp, latent_sigma, group_control))
+        calibrate_dgp_group(design, requested, sigma, latent_sigma, group_control))
       gamma[g, ] <- fitted$gamma
       latent_sd[g, ] <- fitted$latent_sd
       raw_sd[g, ] <- fitted$raw_sd
@@ -380,7 +361,7 @@ prepare_dgp <- function(design, true_amce, groups = NULL, sigma = 0, dgp = c("lo
     if (is.null(diagnostics[[g]]$verification)) diagnostics[[g]]$verification <- reference
     if (control$reference_margin > 0) {
       if (is.null(diagnostics[[g]]$reference_plan)) {
-        # Exact linear and all-zero models need neither a pilot nor fresh simulation draws.
+        # All-zero models need neither a pilot nor fresh simulation draws.
         diagnostics[[g]]$reference_plan <- record_reference_precision(
           plan_reference(reference, group_control, sigma, any(raw_sd[g, ] > 0)), reference)
       }
@@ -392,7 +373,7 @@ prepare_dgp <- function(design, true_amce, groups = NULL, sigma = 0, dgp = c("lo
     results[[g]] <- data.frame(type = "amce", group = if (is.null(groups)) NA_character_ else groups[g],
       group_name = if (is.null(groups)) NA_character_ else groups[g], reference_group = NA_character_,
       meta[c("attribute", "level", "reference_level")], input = requested,
-      requested_amce = if (dgp == "odds") NA_real_ else requested,
+      requested_amce = requested,
       true_amce = reference$mean,
       amce_sd = reference$sd, reference_mcse = reference$mcse, reference_half_width = reference$half_width,
       sd_mcse = reference$sd_mcse, sd_half_width = reference$sd_half_width, stringsAsFactors = FALSE)
@@ -422,7 +403,7 @@ prepare_dgp <- function(design, true_amce, groups = NULL, sigma = 0, dgp = c("lo
     truth <- rbind(truth, do.call(rbind, differences))
   }
   # A simultaneous Monte Carlo confidence bound on distance from the requested target, not a
-  # deterministic bound. Odds scores have no requested AMCE and therefore no such bound.
+  # deterministic bound.
   truth$target_error_bound <- abs(truth$true_amce - truth$requested_amce) + truth$reference_half_width
   rownames(truth) <- NULL
   parameters <- do.call(rbind, parameter_tables)
@@ -436,36 +417,35 @@ prepare_dgp <- function(design, true_amce, groups = NULL, sigma = 0, dgp = c("lo
 # Internal warning eligibility, in truth-table order; never inferred from a rounded residual.
 approximate_nulls <- function(model) {
   truth <- model$truth
-  null <- ifelse(is.na(truth$requested_amce), truth$true_amce == 0, truth$requested_amce == 0)
+  null <- truth$requested_amce == 0
   n_groups <- nrow(model$input)
   group_null <- matrix(null[seq_len(length(model$input))], nrow = n_groups, byrow = TRUE)
-  # Logit zeros follow from exchangeability, linear zeros from construction. Legacy odds zeros
-  # are structurally exact only without coefficient heterogeneity (or via shared populations).
-  group_exact <- group_null & (model$dgp != "odds" | (model$input == 0 & model$latent_sd == 0))
+  # A requested zero uses exchangeable level and reference utilities, including their joint
+  # Gaussian deviations. This preserves the population null under heterogeneity.
+  group_exact <- group_null
   exact <- as.vector(t(group_exact))
   if (n_groups > 1) for (g in 2:n_groups) {
     shared <- identical(model$gamma[g, ], model$gamma[1, ]) &&
       identical(model$raw_sd[g, ], model$raw_sd[1, ]) &&
       identical(model$baseline_sd[g, ], model$baseline_sd[1, ])
-    exact <- c(exact, shared | model$dgp == "linear" | (group_exact[g, ] & group_exact[1, ]))
+    exact <- c(exact, shared | (group_exact[g, ] & group_exact[1, ]))
   }
   null & !exact
 }
 
-calibrate_dgp_group <- function(design, requested, sigma, dgp, latent_sigma, control) {
+# Match AMCE means and, when requested, respondent SDs using a fixed training sample per attempt.
+calibrate_dgp_group <- function(design, requested, sigma, latent_sigma, control) {
   meta <- effect_metadata(design)
   p <- length(requested)
   latent <- if (is.null(latent_sigma)) 0 else latent_sigma
-  if (dgp == "logit") {
-    bound <- 1 - 1 / design$n_levels[meta$attribute_index]
-    if (any(abs(requested) >= bound) || any(requested^2 + sigma^2 >= bound^2)) {
-      stop("infeasible or boundary logit targets: finite coefficients cannot reach the paired-choice AMCE bounds.", call. = FALSE)
-    }
-    for (j in split(seq_len(p), meta$attribute_index)) {
-      probabilities <- 0.5 - mean(c(0, requested[j])) + c(0, requested[j])
-      if (any(probabilities <= 0 | probabilities >= 1)) {
-        stop("infeasible logit AMCEs: implied marginal choice probabilities are outside (0, 1).", call. = FALSE)
-      }
+  bound <- 1 - 1 / design$n_levels[meta$attribute_index]
+  if (any(abs(requested) >= bound) || any(requested^2 + sigma^2 >= bound^2)) {
+    stop("infeasible or boundary logit targets: finite coefficients cannot reach the paired-choice AMCE bounds.", call. = FALSE)
+  }
+  for (j in split(seq_len(p), meta$attribute_index)) {
+    probabilities <- 0.5 - mean(c(0, requested[j])) + c(0, requested[j])
+    if (any(probabilities <= 0 | probabilities >= 1)) {
+      stop("infeasible logit AMCEs: implied marginal choice probabilities are outside (0, 1).", call. = FALSE)
     }
   }
   active_attributes <- vapply(split(requested, meta$attribute_index), function(x) any(x != 0), logical(1))
@@ -484,7 +464,7 @@ calibrate_dgp_group <- function(design, requested, sigma, dgp, latent_sigma, con
   target <- requested[active]
   q <- length(target)
   blocks <- split(seq_len(q), rep(seq_along(lv), lv - 1))
-  structural_zero <- if (dgp == "logit") target == 0 else rep(FALSE, q)
+  structural_zero <- target == 0
   mean_indices <- which(target != 0)
   sd_parameter <- seq_len(q)
   for (j in blocks) {
@@ -514,56 +494,41 @@ calibrate_dgp_group <- function(design, requested, sigma, dgp, latent_sigma, con
     }
     list(gamma = gamma, sd = sd, baseline_sd = baseline)
   }
-  train <- NULL
-  reference_control <- control
   for (attempt in seq_len(control$max_attempts)) {
-    if (dgp == "odds") {
-      # Odds parameters are fixed scores, so training draws cannot improve reference precision.
-      # Enlarge the actual integration budget on retry, keeping tolerance and multiplicity fixed.
-      reference_control$verification_pairs <- control$verification_pairs * 2^(attempt - 1)
-      reference_control$verification_draws <- control$verification_draws * 2^(attempt - 1)
-      parameters <- list(gamma = target, sd = rep(latent, q), baseline_sd = numeric(length(lv)))
+    train <- reference_sample(lv, control, control$calibration_pairs * 2^(attempt - 1),
+                               control$calibration_draws * 2^(attempt - 1), sigma > 0 || latent > 0)
+    if (!length(start)) {
+      parameters <- unpack(start)
       solved <- list(converged = TRUE, residual = 0, iterations = 0L)
     } else {
-      train <- reference_sample(lv, control, control$calibration_pairs * 2^(attempt - 1),
-                                 control$calibration_draws * 2^(attempt - 1), sigma > 0 || latent > 0)
-      if (!length(start)) {
-        parameters <- unpack(start)
-        solved <- list(converged = TRUE, residual = 0, iterations = 0L)
-      } else {
-        fn <- function(x) {
-          par <- unpack(x)
-          moment <- reference_moments(par$gamma, par$sd, train, dgp, par$baseline_sd)
-          moment$sd[structural_zero] <- sqrt(pmax(0, moment$second[structural_zero]))
-          sd_moments <- vapply(sd_groups, function(j) sqrt(mean(moment$sd[j]^2)), numeric(1))
-          c(moment$mean[mean_indices] - target[mean_indices], if (sigma > 0) sd_moments - sigma)
-        }
-        if (iterations >= control$maxit) stop("logit calibration did not converge within 100 total iterations.", call. = FALSE)
-        solved <- solve_amce_moments(fn, start, control$solver_tol, control$maxit - iterations)
-        iterations <- iterations + solved$iterations
-        if (!solved$converged) stop("logit calibration did not converge; targets may be infeasible or near a boundary (max residual ",
-                                    signif(max(abs(solved$residual)), 3), ").", call. = FALSE)
-        parameters <- unpack(solved$x)
-        start <- solved$x
+      fn <- function(x) {
+        par <- unpack(x)
+        moment <- reference_moments(par$gamma, par$sd, train, par$baseline_sd)
+        moment$sd[structural_zero] <- sqrt(pmax(0, moment$second[structural_zero]))
+        sd_moments <- vapply(sd_groups, function(j) sqrt(mean(moment$sd[j]^2)), numeric(1))
+        c(moment$mean[mean_indices] - target[mean_indices], if (sigma > 0) sd_moments - sigma)
       }
+      if (iterations >= control$maxit) stop("logit calibration did not converge within 100 total iterations.", call. = FALSE)
+      solved <- solve_amce_moments(fn, start, control$solver_tol, control$maxit - iterations)
+      iterations <- iterations + solved$iterations
+      if (!solved$converged) stop("logit calibration did not converge; targets may be infeasible or near a boundary (max residual ",
+                                  signif(max(abs(solved$residual)), 3), ").", call. = FALSE)
+      parameters <- unpack(solved$x)
+      start <- solved$x
     }
     # Verification always uses fresh draws, independent of the training reference.
-    verified <- verify_dgp(parameters$gamma, parameters$sd, lv, dgp, reference_control,
-                           target = if (dgp == "odds") NULL else target,
-                           sigma = if (dgp == "logit") sigma else NULL, structural_zero = structural_zero,
+    verified <- verify_dgp(parameters$gamma, parameters$sd, lv, control,
+                           target = target, sigma = sigma, structural_zero = structural_zero,
                            baseline_sd = parameters$baseline_sd, acceptance_margin = control$reference_margin)
     if (verified$accepted) break
   }
   if (!verified$accepted) {
-    if (dgp == "odds") stop("legacy odds reference precision budget exhausted after ", attempt,
-      " attempt(s); increase verification_draws, verification_pairs, max_verification_batches or max_attempts in calibration_control.",
-      call. = FALSE)
     if (control$reference_margin > 0) stop("reference verification could not establish the reserved calibration margin; ",
       "increase calibration/verification budgets or reduce reference_margin.", call. = FALSE)
     stop("reference verification could not establish the requested AMCE/SD precision; increase reference draws or revise the targets.", call. = FALSE)
   }
   plan <- if (control$reference_margin > 0) {
-    plan_reference(verified, reference_control, sigma, any(parameters$sd > 0))
+    plan_reference(verified, control, sigma, any(parameters$sd > 0))
   } else NULL
   reference <- verified
   if (verified$batches > 0L) {
@@ -571,14 +536,11 @@ calibrate_dgp_group <- function(design, requested, sigma, dgp, latent_sigma, con
     # A fresh substream also separates it from experiments if their seed equals the calibration seed.
     assign(".Random.seed", parallel::nextRNGSubStream(get(".Random.seed", envir = .GlobalEnv)),
            envir = .GlobalEnv)
-    reference <- verify_dgp(parameters$gamma, parameters$sd, lv, dgp, reference_control,
-      target = if (dgp == "odds") NULL else target, sigma = if (dgp == "logit") sigma else NULL,
+    reference <- verify_dgp(parameters$gamma, parameters$sd, lv, control, target = target, sigma = sigma,
       structural_zero = structural_zero, baseline_sd = parameters$baseline_sd,
       fixed_batches = if (is.null(plan)) verified$batches else plan$batches)
   }
-  reference$contradicted <- reference_contradicted(reference,
-    target = if (dgp == "odds") NULL else target, sigma = if (dgp == "logit") sigma else NULL,
-    tolerance = control$tolerance)
+  reference$contradicted <- reference_contradicted(reference, target, sigma, control$tolerance)
   if (reference$contradicted) warning("The fresh final reference contradicts the requested AMCE/SD tolerance: ",
     "at least one reference interval lies wholly outside its tolerance band. ",
     "The model and reference are retained; inspect diagnostics and revisit calibration.", call. = FALSE)
@@ -598,7 +560,7 @@ calibrate_dgp_group <- function(design, requested, sigma, dgp, latent_sigma, con
     latent_sd = sqrt(sd^2 + baseline[meta$attribute_index]^2),
     diagnostics = list(converged = TRUE, iterations = iterations,
     attempts = attempt, max_residual = max(abs(solved$residual)), seed = control$seed,
-    calibration_pairs = if (is.null(train)) 0L else train$ref$pairs,
+    calibration_pairs = train$ref$pairs,
     calibration_draws = if (is.null(train$U)) 0L else 2L * nrow(train$U),
     verification = verified, reference = reference))
   if (!is.null(plan)) result$diagnostics$reference_plan <- plan

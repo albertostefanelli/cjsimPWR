@@ -15,20 +15,16 @@
 #' @param sigma heterogeneity of preferences: a single non-negative number, the standard deviation,
 #'   across respondents, of each respondent's own AMCE, on the probability scale (`sigma = 0.05` means
 #'   individual AMCEs spread with SD 0.05 around the requested AMCE). One call takes one `sigma`, shared
-#'   across effects and groups; it does not accept a vector. Available for the logit model; the linear
-#'   model requires `sigma = 0`. A requested zero AMCE stays zero in the population; individual
-#'   respondents can still have positive or negative effects under heterogeneity.
+#'   across effects and groups; it does not accept a vector. A requested zero AMCE stays zero in the
+#'   population; individual respondents can still have positive or negative effects under heterogeneity.
 #'   There is no generally valid value: use pilot evidence where available, otherwise compare separate
 #'   calls at labelled candidate values (for example, 0, 0.05, 0.10 and 0.15) with the requested AMCEs
 #'   held fixed.
-#' @param dgp choice model: `"logit"` (default), calibrated so that generated AMCEs match `true_amce`
-#'   within the calibration tolerance;
-#'   `"linear"`, where the AMCEs equal `true_amce` exactly but no heterogeneity is possible; or
-#'   `"odds"`, the deprecated model of versions up to 0.2.1, whose inputs are score coefficients rather
-#'   than AMCEs.
-#' @param latent_sigma alternative to `sigma`: the SD of respondent-level deviations on the model's
-#'   coefficient scale. With `"odds"` it reproduces the old `sigma.u_k`. The implied AMCE SDs are
-#'   reported in the model's `truth` table.
+#' @param dgp choice model: `"logit"` (the default), calibrated so that generated AMCEs match
+#'   `true_amce` within the calibration tolerance. The argument is retained so that later versions can
+#'   add other choice models without changing existing calls.
+#' @param latent_sigma alternative to `sigma`: the SD of respondent-level deviations on the logit
+#'   coefficient scale. The implied AMCE SDs are reported in the model's `truth` table.
 #' @param model optional prepared `cj_dgp` object, from a previous simulation's `dgp` attribute or
 #'   [power_sim()]'s `model`, for repeated experiments without recalibration.
 #'   Supply the same design and omit true_amce, sigma, dgp, latent_sigma and calibration_control.
@@ -36,7 +32,7 @@
 #'   of [simulate_experiment()] below. `reference_margin = 0.5` enables experimental precision planning;
 #'   its default of zero retains the original calibration and reference budgets.
 #'
-#' @section Calibration: For the logit model the package solves for coefficients whose AMCEs approximate
+#' @section Calibration: The package solves for coefficients whose AMCEs approximate
 #'   `true_amce` (and, with `sigma > 0`, whose respondent-level AMCEs have SD `sigma`), then verifies the
 #'   solution against fresh reference draws at a nominal 99% Monte Carlo confidence. Verification stops
 #'   when every true AMCE is within `tolerance` of its request and every AMCE SD is within
@@ -83,16 +79,9 @@
 #'   verification to fail. `max_reference_batches` caps the final budget per group.
 #'   `diagnostics[[g]]$reference_plan` reports `batches`, `cap_limited`, `predicted_precision_met` and
 #'   realised `precision_met`. A batch cap or a missed precision target alone does not raise a warning,
-#'   and meeting the target is not guaranteed. This option requires AMCE targets and is unavailable for
-#'   the legacy odds model; see the [calibration guide](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/calibration.md)
+#'   and meeting the target is not guaranteed. See the
+#'   [calibration guide](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/calibration.md)
 #'   (online) for the full derivation and reading guide.
-#'
-#'   The deprecated odds model has fixed scores rather than AMCE/SD targets, so verification checks
-#'   numerical precision only: each retry doubles `verification_pairs` and `verification_draws`, up to
-#'   `max_attempts`, without changing the tolerance. Exhausting this budget stops with a reference
-#'   precision error. Its final `accepted` flag records precision only; `contradicted` is always FALSE,
-#'   since there are no AMCE/SD targets to test. The separate null-sensitivity warning in [power_sim()]
-#'   is unchanged.
 #'
 #' @return A data frame with one row per profile and columns `group` (`NA` without groups), `respondent`
 #'   (unique across groups), `task`, `profile` (1 or 2), `y` (1 if the profile was chosen) and one factor
@@ -127,7 +116,7 @@
 #' # reuse a calibrated model for another experiment
 #' second <- simulate_experiment(design, units = 100, n_tasks = 3, model = attr(data, "dgp"))
 simulate_experiment <- function(design, true_amce = NULL, units, n_tasks, groups = NULL, sigma = 0,
-                                dgp = c("logit", "linear", "odds"), latent_sigma = NULL,
+                                dgp = "logit", latent_sigma = NULL,
                                 model = NULL, calibration_control = list()) {
   if (!inherits(design, "cj_design")) {
     stop("`design` must be created with conjoint_design().", call. = FALSE)
@@ -135,6 +124,9 @@ simulate_experiment <- function(design, true_amce = NULL, units, n_tasks, groups
   if (!is.null(model)) {
     if (!inherits(model, "cj_dgp") || !identical(model$design, design)) {
       stop("`model` must be a prepared DGP for this exact design.", call. = FALSE)
+    }
+    if (!identical(model$dgp, "logit")) {
+      stop("`model` must be a prepared logit DGP.", call. = FALSE)
     }
     if ((!missing(true_amce) && !is.null(true_amce)) || !missing(sigma) || !missing(dgp) ||
         !missing(latent_sigma) || !missing(calibration_control)) {
@@ -147,7 +139,7 @@ simulate_experiment <- function(design, true_amce = NULL, units, n_tasks, groups
   units <- per_group(units, groups, "units")
   n_tasks <- per_group(n_tasks, groups, "n_tasks")
   if (is.null(model)) {
-    model <- prepare_dgp(design, true_amce, groups, sigma, dgp = match.arg(dgp),
+    model <- prepare_dgp(design, true_amce, groups, sigma, dgp = dgp,
                          latent_sigma = latent_sigma, control = calibration_control)
   }
 
@@ -157,6 +149,7 @@ simulate_experiment <- function(design, true_amce = NULL, units, n_tasks, groups
     data$group <- groups[group_of[data$respondent]]
   }
 
+  # Keep the draw order stable: coefficient deviations, reference utilities, then choices.
   deviations <- matrix(stats::rnorm(length(group_of) * ncol(model$gamma)), nrow = length(group_of))
   coef_respondent <- model$gamma[group_of, , drop = FALSE] + deviations * model$raw_sd[group_of, , drop = FALSE]
   if (any(model$baseline_sd > 0)) {
@@ -167,10 +160,7 @@ simulate_experiment <- function(design, true_amce = NULL, units, n_tasks, groups
   }
   score <- profile_scores(data, design, coef_respondent)
   first <- data$profile == 1L
-  p1 <- switch(model$dgp,
-               logit = stats::plogis(score[first] - score[!first]),
-               linear = 0.5 + score[first] - score[!first],
-               odds = odds_choice(score[first], score[!first]))
+  p1 <- stats::plogis(score[first] - score[!first])
   y1 <- as.integer(stats::runif(length(p1)) < p1)
   data$y[first] <- y1
   data$y[!first] <- 1L - y1
@@ -217,15 +207,6 @@ profile_scores <- function(data, design, coef_respondent) {
     score[has] <- score[has] + coef_respondent[cbind(data$respondent[has], offsets[k] + code[has] - 1L)]
   }
   score
-}
-
-# v0.2.1 choice model: each profile's score is 0.5 plus its coefficients, clipped to [0.001, 0.999];
-# profile 1 is chosen with probability odds1 / (odds1 + odds2).
-odds_choice <- function(a, b) {
-  s1 <- pmin(pmax(0.5 + a, 0.001), 0.999)
-  s2 <- pmin(pmax(0.5 + b, 0.001), 0.999)
-  odds <- (s1 / (1 - s1)) / (s2 / (1 - s2))
-  odds / (1 + odds)
 }
 
 # Group names, checked.

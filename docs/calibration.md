@@ -22,7 +22,7 @@ Jump to: [targets and numerical truth](#1-targets-and-numerical-truth),
 [calibration, verification and final reference](#2-calibration-verification-and-final-reference),
 [reading diagnostics](#3-reading-diagnostics), [choosing precision](#4-choosing-precision),
 [bounds and sensitivity](#5-bounds-and-sensitivity),
-[reproducibility and legacy behaviour](#6-reproducibility-and-legacy-behaviour).
+[reproducibility](#6-reproducibility).
 
 ## 1. Targets and numerical truth
 
@@ -67,9 +67,7 @@ change a conclusion; the package reports them for transparency and reproducibili
 
 ## 2. Calibration, verification and final reference
 
-For the default logit model, calibration runs once for each group of respondents, in three steps. (With
-`dgp = "linear"`, your requested AMCEs are used directly as the model's settings, so none of these
-steps is needed and `true_amce` equals your request exactly; that model requires `sigma = 0`.)
+Calibration runs once for each group of respondents, in three steps.
 
 1. **Calibrate.** The package searches for the attractiveness settings (utility coefficients) that
    reproduce your requested AMCEs and, with `sigma > 0`, for how much respondents differ, so that the
@@ -111,7 +109,7 @@ Groups whose requests are identical for every effect share one calibration and o
 and so do repeated calls that reuse a prepared `model`. A difference between such populations is
 exactly zero, with no measurement error. The final measurement's random numbers are always separate
 from those that simulate the experiments, even when calibration and experiments are given the same seed
-(see [reproducibility](#6-reproducibility-and-legacy-behaviour)).
+(see [reproducibility](#6-reproducibility)).
 
 ## 3. Reading diagnostics
 
@@ -207,8 +205,7 @@ the generated effect lies within the margin of error, as it does at a nominal 99
 most `target_error_bound` away from your request: `abs(theta - tau) <= target_error_bound`. For
 example, a request of 0.05, a measurement of 0.0498 and a margin of error of 0.0001 give a bound of
 0.0003: the generated effect is within 0.03 percentage points of your request. This is a confidence
-statement, not a guarantee, and it is not the effect's standard error in a simulated experiment. The
-deprecated odds model has no requested AMCE, so its bound is `NA`.
+statement, not a guarantee, and it is not the effect's standard error in a simulated experiment.
 
 For two separately calibrated groups A and B, the measurement of their difference and its precision
 combine as:
@@ -228,7 +225,7 @@ See [Type I error and reference uncertainty](type_1_error.md#interpreting-refere
 to interpret Type I error and its sensitivity warning, and the `summarise_runs()` help for the
 definitions of the `coverage_reference_lower` and `coverage_reference_upper` bounds.
 
-## 6. Reproducibility and legacy behaviour
+## 6. Reproducibility
 
 A seed is the starting point of a sequence of random numbers: the same seed gives the same results.
 Calibration has its own seed, `calibration_control$seed`, separate from the seed of the simulated
@@ -238,12 +235,6 @@ same seed value, some of their random draws can coincide, because both start fro
 final measurement always uses a separate stream regardless, keeping its draws apart from the
 experiments'. See the `power_sim()` help (section "Reproducibility") for the full guarantee across
 worker counts and repeated calls.
-
-The deprecated odds model (`dgp = "odds"`) takes fixed scores rather than AMCE or SD targets, so there
-is nothing to search for. Its check only confirms that the measurement is precise enough, doubling the
-pair and respondent samples on each retry, up to `max_attempts`. Its `accepted` flag therefore reflects
-precision alone, and `contradicted` is always `FALSE`, since there is no target to contradict. How to
-migrate from odds-model arguments is described in NEWS, not repeated here.
 
 ## References
 

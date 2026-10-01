@@ -37,13 +37,8 @@ data   <- simulate_experiment(design, amce, units = 500, n_tasks = 5, sigma = 0.
 attr(data, "dgp")$truth      # requested and true AMCEs, and the SD of respondent-level AMCEs
 ```
 
-`dgp` selects the model:
-
-| Model | Input meaning | Heterogeneity | Main restriction |
-| --- | --- | --- | --- |
-| `"logit"` (default) | AMCEs, calibrated to match `true_amce` | `sigma` or `latent_sigma` | See feasibility bounds below. |
-| `"linear"` | AMCEs, exact by construction | None (`sigma` must be 0) | Attribute ranges (including zero) must sum to at most 0.5, or probabilities leave [0, 1]. |
-| `"odds"` | Score coefficients (deprecated, versions up to 0.2.1) | `latent_sigma` only | Kept to reproduce old results; see NEWS for migration. |
+`dgp = "logit"`, the default, names this choice model. The argument is retained so that later versions
+can add other choice models without changing existing calls.
 
 ## Assumptions and feasibility
 
@@ -64,7 +59,7 @@ Power is computed for data generated under these assumptions; departures in a re
   requested differences between named subgroups; it does not represent general correlated preferences
   shared across attributes (for example through ideology) within one population.
 
-Not every request is feasible. In the logit model, for an attribute with L levels, no AMCE can reach
+Not every request is feasible. For an attribute with L levels, no AMCE can reach
 `1 - 1/L` (0.5 for two levels), `AMCE^2 + sigma^2` must stay below `(1 - 1/L)^2`, and the marginal choice
 probabilities implied by an attribute's AMCEs must lie within (0, 1). These are **necessary** conditions,
 checked before solving, not a full feasibility proof: passing them does not guarantee a solution exists.
@@ -77,7 +72,7 @@ Either failure stops the call with an error.
 `sigma` is a single non-negative number: the standard deviation, across respondents, of each
 respondent's own AMCE, on the probability scale, shared across every effect and every group in one call.
 `sigma = 0` gives every respondent the same AMCE. A level with a requested AMCE of zero has an average
-effect of exactly zero in the population under the calibrated logit model, even though individual
+effect of exactly zero in the population, even though individual
 effects still vary around zero with SD `sigma`; Type I error refers to this population-average null.
 
 The package draws Gaussian deviations of the utility coefficients, calibrated so that respondent-level
@@ -103,7 +98,7 @@ power
 ## Calibration
 
 Calibration exists so that a nonlinear choice model can still be told "AMCE of 0.05," not just a utility
-coefficient. For the logit model, this runs once per group, in three stages: **calibrate** (solve for
+coefficient. It runs once per group, in three stages: **calibrate** (solve for
 coefficients reproducing the requested AMCEs and `sigma`), **verify** (check the result against fresh,
 independent draws at a nominal 99% Monte Carlo confidence, retrying with more draws or recalibrating if
 needed), and compute a **final reference** (an independent recalculation, on a fixed budget, that never

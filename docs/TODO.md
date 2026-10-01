@@ -22,7 +22,6 @@ question beyond scope, not a lower priority than "proposed."
 | Decision | Status |
 | --- | --- |
 | `reference_margin` | Undecided: keep, promote out of experimental status, or remove. |
-| `dgp = "odds"` | Undecided: remove the deprecated model of versions up to 0.2.1. |
 
 ## References
 
