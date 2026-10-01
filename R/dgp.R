@@ -416,21 +416,17 @@ prepare_dgp <- function(design, true_amce, groups = NULL, sigma = 0, dgp = "logi
 
 # Internal warning eligibility, in truth-table order; never inferred from a rounded residual.
 approximate_nulls <- function(model) {
-  truth <- model$truth
-  null <- truth$requested_amce == 0
-  n_groups <- nrow(model$input)
-  group_null <- matrix(null[seq_len(length(model$input))], nrow = n_groups, byrow = TRUE)
+  input <- model$input
   # A requested zero uses exchangeable level and reference utilities, including their joint
   # Gaussian deviations. This preserves the population null under heterogeneity.
-  group_exact <- group_null
-  exact <- as.vector(t(group_exact))
-  if (n_groups > 1) for (g in 2:n_groups) {
+  flags <- rep(FALSE, length(input))
+  for (g in seq_len(nrow(input))[-1]) {
     shared <- identical(model$gamma[g, ], model$gamma[1, ]) &&
       identical(model$raw_sd[g, ], model$raw_sd[1, ]) &&
       identical(model$baseline_sd[g, ], model$baseline_sd[1, ])
-    exact <- c(exact, shared | (group_exact[g, ] & group_exact[1, ]))
+    flags <- c(flags, !shared & input[g, ] == input[1, ] & input[1, ] != 0)
   }
-  null & !exact
+  flags
 }
 
 # Match AMCE means and, when requested, respondent SDs using a fixed training sample per attempt.
