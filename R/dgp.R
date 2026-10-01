@@ -80,21 +80,69 @@ reference_dummies <- function(codes, n_levels) {
   }))
 }
 
-# Under independent uniform randomization, AMCE = Cov(Z)^-1 E[(Z1-Z2)(P1-.5)]/2.
-# Exact small-design enumeration and the MC oracle use the same identity. MC uses a
-# control variate with known expectation beta/4 to reduce profile-integration error.
-profile_reference <- function(n_levels, pairs, exact_max_pairs) {
-  exact <- 2 * sum(log(n_levels)) <= log(exact_max_pairs)
-  if (exact) {
-    codes <- as.matrix(expand.grid(lapply(n_levels, seq_len)))
-    Z <- reference_dummies(codes, n_levels)
-    m <- nrow(Z)
-    z1 <- Z[rep(seq_len(m), each = m), , drop = FALSE]
-    z2 <- Z[rep(seq_len(m), times = m), , drop = FALSE]
-  } else {
-    z1 <- reference_dummies(draw_profiles(n_levels, pairs), n_levels)
-    z2 <- reference_dummies(draw_profiles(n_levels, pairs), n_levels)
+# Shared by reference construction and verification, including the homogeneous shortcut.
+exact_profile_eligible <- function(n_levels, exact_max_pairs) {
+  2 * sum(log(n_levels)) <= log(exact_max_pairs)
+}
+
+# One zero difference (multiplicity L) and both signs of every distinct nonzero difference.
+# Positive representatives have their first nonzero dummy entry positive.
+profile_difference_block <- function(levels) {
+  positive <- matrix(0, levels * (levels - 1) / 2, levels - 1)
+  row <- 0L
+  for (a in 2:levels) {
+    row <- row + 1L
+    positive[row, a - 1L] <- 1
+    if (a < levels) for (b in (a + 1L):levels) {
+      row <- row + 1L
+      positive[row, a - 1L] <- 1
+      positive[row, b - 1L] <- -1
+    }
   }
+  rbind(0, positive, -positive)
+}
+
+exact_profile_reference <- function(n_levels) {
+  sizes <- n_levels * (n_levels - 1) + 1
+  rows <- (prod(sizes) - 1) / 2
+  pairs <- prod(n_levels)^2
+  blocks <- lapply(n_levels, profile_difference_block)
+  columns <- split(seq_len(sum(n_levels - 1)), rep(seq_along(n_levels), n_levels - 1))
+  delta <- matrix(0, rows, sum(n_levels - 1))
+  mass <- numeric(rows)
+  offset <- 0L
+  # Partition by the first nonzero attribute. Earlier attributes match, this block is positive,
+  # and later blocks take every value. This directly generates one row per {d, -d}, never all pairs.
+  for (k in seq_along(n_levels)) {
+    later <- seq_along(n_levels)[seq_along(n_levels) > k]
+    indices <- expand.grid(c(list(1L + seq_len((sizes[k] - 1) / 2)), lapply(sizes[later], seq_len)))
+    selected <- offset + seq_len(nrow(indices))
+    delta[selected, columns[[k]]] <- blocks[[k]][indices[[1]], , drop = FALSE]
+    multiplicity <- rep(prod(n_levels[seq_len(k - 1L)]), nrow(indices))
+    for (i in seq_along(later)) {
+      j <- later[i]
+      delta[selected, columns[[j]]] <- blocks[[j]][indices[[i + 1L]], , drop = FALSE]
+      multiplicity <- multiplicity * ifelse(indices[[i + 1L]] == 1L, n_levels[j], 1)
+    }
+    # The omitted all-zero row has zero contribution. Its mass must NOT be redistributed.
+    mass[selected] <- 2 * multiplicity / pairs
+    offset <- offset + nrow(indices)
+  }
+  weights <- delta
+  for (k in seq_along(columns)) {
+    j <- columns[[k]]
+    weights[, j] <- (delta[, j, drop = FALSE] + rowSums(delta[, j, drop = FALSE])) * n_levels[k] / 2 * mass
+  }
+  list(delta = delta, weights = weights, exact = TRUE, pairs = as.integer(pairs))
+}
+
+# Under independent uniform randomization, AMCE = Cov(Z)^-1 E[(Z1-Z2)(P1-.5)]/2.
+# Exact integration and the MC oracle use the same identity. MC uses a control variate with
+# known expectation beta/4 to reduce profile-integration error.
+profile_reference <- function(n_levels, pairs, exact_max_pairs) {
+  if (exact_profile_eligible(n_levels, exact_max_pairs)) return(exact_profile_reference(n_levels))
+  z1 <- reference_dummies(draw_profiles(n_levels, pairs), n_levels)
+  z2 <- reference_dummies(draw_profiles(n_levels, pairs), n_levels)
   delta <- z1 - z2
   weights <- delta
   blocks <- split(seq_len(ncol(delta)), rep(seq_along(n_levels), n_levels - 1L))
@@ -102,7 +150,7 @@ profile_reference <- function(n_levels, pairs, exact_max_pairs) {
     j <- blocks[[k]]
     weights[, j] <- (delta[, j, drop = FALSE] + rowSums(delta[, j, drop = FALSE])) * n_levels[k] / 2
   }
-  list(delta = delta, weights = weights / nrow(delta), exact = exact,
+  list(delta = delta, weights = weights / nrow(delta), exact = FALSE,
        pairs = nrow(delta))
 }
 
@@ -127,8 +175,8 @@ conditional_amces <- function(beta, reference) {
   result
 }
 
-reference_sample <- function(n_levels, control, pairs, draws, heterogeneous) {
-  ref <- profile_reference(n_levels, pairs, control$exact_max_pairs)
+reference_sample <- function(n_levels, control, pairs, draws, heterogeneous, exact_reference = NULL) {
+  ref <- if (is.null(exact_reference)) profile_reference(n_levels, pairs, control$exact_max_pairs) else exact_reference
   # Independent profile samples remove the squared-integration-error bias from the second moment.
   ref2 <- if (ref$exact || !heterogeneous) NULL else profile_reference(n_levels, pairs, control$exact_max_pairs)
   U <- if (heterogeneous) matrix(stats::rnorm(draws * (sum(n_levels - 1) + length(n_levels))), draws) else NULL
@@ -198,11 +246,14 @@ solve_amce_moments <- function(fn, x, tolerance, maxit) {
 # A fixed-budget final reference has just one look and is never used to select the model.
 verify_dgp <- function(gamma, latent_sd, n_levels, control, target, sigma = 0,
                        structural_zero = rep(FALSE, length(gamma)), baseline_sd = NULL,
-                       fixed_batches = NULL, acceptance_margin = 0) {
+                       fixed_batches = NULL, acceptance_margin = 0, exact_reference = NULL) {
   heterogeneous <- any(latent_sd > 0)
-  exact <- 2 * sum(log(n_levels)) <= log(control$exact_max_pairs)
+  exact <- exact_profile_eligible(n_levels, control$exact_max_pairs)
+  if (exact && is.null(exact_reference)) {
+    exact_reference <- profile_reference(n_levels, control$verification_pairs, control$exact_max_pairs)
+  }
   if (exact && !heterogeneous) {
-    sample <- reference_sample(n_levels, control, 1, 2, FALSE)
+    sample <- reference_sample(n_levels, control, control$verification_pairs, 2, FALSE, exact_reference)
     moments <- reference_moments(gamma, latent_sd, sample)
     return(c(moments, list(mcse = rep(0, length(gamma)), sd_mcse = rep(0, length(gamma)),
                           half_width = rep(0, length(gamma)), sd_half_width = rep(0, length(gamma)),
@@ -220,7 +271,7 @@ verify_dgp <- function(gamma, latent_sd, n_levels, control, target, sigma = 0,
   comparisons <- n * (if (heterogeneous) 2 else 1) * length(looks) * attempts * family
   for (batch in seq_len(batches)) {
     sample <- reference_sample(n_levels, control, control$verification_pairs,
-                               control$verification_draws, heterogeneous)
+                               control$verification_draws, heterogeneous, exact_reference)
     moment <- reference_moments(gamma, latent_sd, sample, baseline_sd)
     means[batch, ] <- moment$mean; seconds[batch, ] <- moment$second
     if (!batch %in% looks) next
@@ -457,6 +508,9 @@ calibrate_dgp_group <- function(design, requested, sigma, latent_sigma, control)
       method = "exact zero"))))
   }
   lv <- design$n_levels[active_attributes]
+  exact_reference <- if (exact_profile_eligible(lv, control$exact_max_pairs)) {
+    profile_reference(lv, control$calibration_pairs, control$exact_max_pairs)
+  } else NULL
   target <- requested[active]
   q <- length(target)
   blocks <- split(seq_len(q), rep(seq_along(lv), lv - 1))
@@ -492,7 +546,8 @@ calibrate_dgp_group <- function(design, requested, sigma, latent_sigma, control)
   }
   for (attempt in seq_len(control$max_attempts)) {
     train <- reference_sample(lv, control, control$calibration_pairs * 2^(attempt - 1),
-                               control$calibration_draws * 2^(attempt - 1), sigma > 0 || latent > 0)
+                               control$calibration_draws * 2^(attempt - 1), sigma > 0 || latent > 0,
+                               exact_reference)
     if (!length(start)) {
       parameters <- unpack(start)
       solved <- list(converged = TRUE, residual = 0, iterations = 0L)
@@ -515,7 +570,8 @@ calibrate_dgp_group <- function(design, requested, sigma, latent_sigma, control)
     # Verification always uses fresh draws, independent of the training reference.
     verified <- verify_dgp(parameters$gamma, parameters$sd, lv, control,
                            target = target, sigma = sigma, structural_zero = structural_zero,
-                           baseline_sd = parameters$baseline_sd, acceptance_margin = control$reference_margin)
+                           baseline_sd = parameters$baseline_sd, acceptance_margin = control$reference_margin,
+                           exact_reference = exact_reference)
     if (verified$accepted) break
   }
   if (!verified$accepted) {
@@ -534,7 +590,8 @@ calibrate_dgp_group <- function(design, requested, sigma, latent_sigma, control)
            envir = .GlobalEnv)
     reference <- verify_dgp(parameters$gamma, parameters$sd, lv, control, target = target, sigma = sigma,
       structural_zero = structural_zero, baseline_sd = parameters$baseline_sd,
-      fixed_batches = if (is.null(plan)) verified$batches else plan$batches)
+      fixed_batches = if (is.null(plan)) verified$batches else plan$batches,
+      exact_reference = exact_reference)
   }
   reference$contradicted <- reference_contradicted(reference, target, sigma, control$tolerance)
   if (reference$contradicted) warning("The fresh final reference contradicts the requested AMCE/SD tolerance: ",

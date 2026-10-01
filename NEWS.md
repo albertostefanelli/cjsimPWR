@@ -7,6 +7,7 @@ below.
 
 ## Simulation model
 
+* Compressed exact profile integration makes calibration faster, with results unchanged up to rounding.
 * Choices come from a logit model calibrated so that the population AMCEs match the requested ones.
   Under the earlier choice rule, score coefficients of 0.10 and 0.20 gave generated AMCEs of about
   0.106 and 0.209 for two binary attributes, with both profiles drawn independently.
