@@ -57,8 +57,12 @@ power <- power_sim(
 power
 ```
 
-Each row is one non-reference level, compared with its attribute's first (reference) level; `Type S` and
-`Type M` describe the sign and size of significant estimates. All rates and their MCSEs are computed over
+Each row is one non-reference level, compared with its attribute's first (reference) level. `Type S` is
+the share of significant estimates with the wrong sign, and `Type M` how much significant estimates
+overstate the true AMCE on average (1.08 means 8 percent too large). Both are small when power is high
+but grow quickly when it is low; see the
+[error-rates guide](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/error_rates.md#type-s-and-type-m-errors).
+All rates and their MCSEs are computed over
 `n_valid`, the runs with usable inference — inspect `$failures` for the rest. Zero targets report
 `Type I error`, the false-positive rate, instead of power.
 
@@ -108,7 +112,7 @@ subset(groups$performance, type == "difference")[, c("group", "attribute", "leve
 A difference compares the causal effect of the same level for the two named groups (the display label
 names the non-reference group first, its reference group second); it is not a test of overall
 favourability, and it depends on the attribute's reference level. See the
-[Type I error guide](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/type_1_error.md#reading-the-output)
+[error-rates guide](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/error_rates.md#reading-the-output)
 for interpreting zero-target contrasts and their calibration uncertainty.
 
 ## Comparing candidate sample sizes
@@ -152,7 +156,7 @@ not search for, or guarantee, the minimum sample size that reaches the target.
 | --- | --- |
 | Understand the choice model, `sigma` and its assumptions | [simulation model](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/simulation_model.md) |
 | Choose a clustering/inference method | [clustering](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/clustering.md) |
-| Interpret power vs. Type I error, or check a null | [Type I error](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/type_1_error.md) |
+| Interpret power, Type I error, Type S and Type M, or check a null | [error rates](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/error_rates.md) |
 | Investigate calibration diagnostics or tune precision | [calibration](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/calibration.md) |
 | Compare with closed-form power formulas (cjpowR) | [closed-form comparison](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/closed_form.md) |
 | Compare with DeclareDesign | [DeclareDesign](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/declaredesign.md) |

@@ -19,7 +19,7 @@ experiments.
 Full explanations live in the package guides, online:
 \href{https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/simulation_model.md}{simulation model},
 \href{https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/clustering.md}{clustering and inference},
-\href{https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/type_1_error.md}{power and Type I error},
+\href{https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/error_rates.md}{power, Type I, Type S and Type M errors},
 \href{https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/calibration.md}{calibration and reference precision},
 \href{https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/closed_form.md}{comparison to closed-form power formulas} and
 \href{https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/declaredesign.md}{comparison to DeclareDesign}.

@@ -39,7 +39,7 @@ do.call(power_sim, c(common, list(vcov = "CR2")))                   # CR2, Satte
 Compare power together with the Type I error shown for the zero effect: higher rejection rates can
 reflect more false positives, not greater precision. At `alpha = 0.05`, aim for Type I error near 5%,
 allowing for its Monte Carlo standard error. A check for one null effect does not validate every other
-effect or subgroup; see the [Type I error guide](type_1_error.md#checking-an-effect) for rerunning with
+effect or subgroup; see the [error-rates guide](error_rates.md#checking-an-effect) for rerunning with
 an effect of interest set to zero.
 
 ## Which to use

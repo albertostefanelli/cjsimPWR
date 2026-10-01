@@ -16,7 +16,7 @@ simulated experiments are scored.
 This guide explains that process, how to read its checks and how to make its measurements more
 precise; you mainly need it when a check warns or stops with an error. See the
 [simulation model](simulation_model.md) for the choice model itself and
-[Type I error and reference uncertainty](type_1_error.md) for reading power and Type I error output.
+the [error-rates guide](error_rates.md) for reading power and Type I error output.
 
 Jump to: [targets and numerical truth](#1-targets-and-numerical-truth),
 [calibration, verification and final reference](#2-calibration-verification-and-final-reference),
@@ -228,7 +228,7 @@ error add, which keeps the bound valid for the difference whenever both groups' 
 same time. When the two groups share one population (section 2), their measurement errors are
 identical and cancel, so the difference has no measurement error at all.
 
-See [Type I error and reference uncertainty](type_1_error.md#interpreting-reference-sensitivity) for how
+See the [error-rates guide](error_rates.md#interpreting-reference-sensitivity) for how
 to interpret Type I error and its sensitivity warning, and the `summarise_runs()` help for the
 definitions of the `coverage_reference_lower` and `coverage_reference_upper` bounds.
 

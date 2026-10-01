@@ -1,8 +1,10 @@
-# Type I error, null targets and reference uncertainty
+# Power, Type I, Type S and Type M errors
 
 cjsimPWR reports how often the planned analysis rejects the hypothesis that an effect is zero. When the
 simulated effect is zero, that rate is the Type I error (false-positive) rate; otherwise it is power.
-This guide explains how to read these results and check them for a planned design.
+Among significant estimates of nonzero effects, it also reports Type S and Type M errors: how often
+the sign is wrong and how much the size is exaggerated. This guide explains how to read these results
+and check them for a planned design.
 
 **In brief**
 
@@ -15,7 +17,7 @@ This guide explains how to read these results and check them for a planned desig
   [Morris, White and Crowther (2019)](https://doi.org/10.1002/sim.8086).
 
 Jump to: [reading the output](#reading-the-output), [checking an effect](#checking-an-effect),
-[a subgroup example](#a-subgroup-example),
+[Type S and Type M errors](#type-s-and-type-m-errors), [a subgroup example](#a-subgroup-example),
 [Monte Carlo precision and failed runs](#monte-carlo-precision-and-failed-runs),
 [interpreting reference sensitivity](#interpreting-reference-sensitivity), or
 [the closed-form comparison](#comparison-with-schuessler-and-freitag-2020).
@@ -71,10 +73,31 @@ A single run with every target set to zero is a quick first screen: it reports a
 once. But the rate depends on how many respondents inform each estimate, so an all-zero scenario does not
 establish Type I error for every configuration of the other effects.
 
-Type S is the probability of an incorrect sign among significant estimates, and Type M their mean
-exaggeration ratio ([Gelman and Carlin 2014](https://www.stat.columbia.edu/~gelman/research/published/retropower_final.pdf)); both are undefined
-at a true zero, so cjsimPWR sets them `NA` for all null targets, rather than
-reporting an arbitrary calibration residual as a directional effect with an extreme ratio.
+## Type S and Type M errors
+
+Power says how often an effect is detected, not whether the detected estimates are accurate.
+[Gelman and Carlin (2014)](https://www.stat.columbia.edu/~gelman/research/published/retropower_final.pdf)
+propose two further checks, computed over the significant estimates only:
+
+- **Type S (sign) error** is the share of significant estimates whose sign is opposite to the true
+  AMCE: the study would report, say, a penalty for a level that is in fact preferred.
+- **Type M (magnitude) error**, or exaggeration ratio, is the average size of significant estimates
+  divided by the size of the true AMCE. A value of 1.5 means that significant estimates overstate the
+  effect by 50 percent on average.
+
+Both errors arise because, when power is low, only estimates that happen to be far from zero reach
+significance. With an AMCE of 0.05 and a standard error of 0.0175, power is about 80 percent and
+significant estimates are on average about 1.1 times the true effect. With a standard error of 0.035,
+power falls to about 30 percent and significant estimates are on average about 1.8 times the true
+effect; with a standard error of 0.05, power is 17 percent, the exaggeration ratio about 2.5, and about
+1 percent of significant estimates have the wrong sign.[^typesm]
+
+Both measures are undefined at a true zero, which has no sign or size, so cjsimPWR sets them `NA` for
+all null targets rather than reporting an arbitrary calibration residual as a directional effect with
+an extreme ratio.
+
+[^typesm]: These values come from the normal approximation of Lu, Qiu and Deng (2019), which the
+    package also reports as `analytic_type_s` and `analytic_type_m` in `$performance`.
 
 ## A subgroup example
 
@@ -155,14 +178,17 @@ guide) rather than treating these conditional MCSEs as total uncertainty.
 Their [cjpowR implementation](https://github.com/m-freitag/cjpowR/blob/5852d88338235abc28919b2941ea56fe0532d48d/R/amce.R)
 reports the significance level itself as the zero-effect "power" — a theoretical value under a normal
 approximation, not a measured false-positive rate. See the
-[closed-form comparison](closed_form.md#type-i-error-equals-the-significance-level-3) for the full
-expression and a worked comparison against cjsimPWR's simulated rejection rate.
+[closed-form guide](closed_form.md#power-and-sample-size) for the full two-sided normal expression and
+its [comparison with simulation](closed_form.md#comparison-with-simulation) for why simulated rejection
+rates can differ.
 
 ## References
 
 - Gelman, A., & Carlin, J. (2014). Beyond power calculations: Assessing Type S (sign) and Type M
   (magnitude) errors. *Perspectives on Psychological Science*, 9(6), 641–651.
   [Author-hosted paper](https://www.stat.columbia.edu/~gelman/research/published/retropower_final.pdf).
+- Lu, J., Qiu, Y., & Deng, A. (2019). A note on Type S/M errors in hypothesis testing. *British Journal
+  of Mathematical and Statistical Psychology*, 72(1), 1–17. [Paper](https://doi.org/10.1111/bmsp.12132).
 - Morris, T. P., White, I. R., & Crowther, M. J. (2019). Using simulation studies to evaluate statistical
   methods. *Statistics in Medicine*, 38(11), 2074–2102. [Paper](https://doi.org/10.1002/sim.8086).
 - Pustejovsky, J. E., & Tipton, E. (2018). Small-sample methods for cluster-robust variance estimation

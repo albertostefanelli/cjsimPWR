@@ -7,7 +7,7 @@
 #' Full explanations live in the package guides, online:
 #' [simulation model](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/simulation_model.md),
 #' [clustering and inference](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/clustering.md),
-#' [power and Type I error](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/type_1_error.md),
+#' [power, Type I, Type S and Type M errors](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/error_rates.md),
 #' [calibration and reference precision](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/calibration.md),
 #' [comparison to closed-form power formulas](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/closed_form.md) and
 #' [comparison to DeclareDesign](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/declaredesign.md).

@@ -54,20 +54,24 @@ power <- power_sim(
 power
 #> Conjoint simulation: 1000 runs; logit DGP; CR1 / normal inference.
 #>  type group attribute level true_amce Power         Type I error  Type S        Type M        Coverage      Runs (failed) Valid runs
-#>  amce <NA>  var_1     1      0.05     0.976 (0.005)               0.000 (0.000) 1.029 (0.008) 0.948 (0.007) 1000 (0)      1000      
-#>  amce <NA>  var_2     1     -0.05     0.874 (0.010)               0.000 (0.000) 1.083 (0.009) 0.946 (0.007) 1000 (0)      1000      
-#>  amce <NA>  var_2     2      0.00                   0.054 (0.007)                             0.946 (0.007) 1000 (0)      1000      
+#>  amce <NA>  var_1     1      0.05     0.976 (0.005)               0.000 (0.000) 1.029 (0.008) 0.948 (0.007) 1000 (0)      1000
+#>  amce <NA>  var_2     1     -0.05     0.874 (0.010)               0.000 (0.000) 1.083 (0.009) 0.946 (0.007) 1000 (0)      1000
+#>  amce <NA>  var_2     2      0.00                   0.054 (0.007)                             0.946 (0.007) 1000 (0)      1000
 #> Monte Carlo standard errors in parentheses.
 #> Power is for non-null targets; Type I error is for null targets, not nonsignificant estimates.
 #> Measures are conditional on runs with valid inference.
 ```
 
 Each row is one non-reference level, compared with its attribute’s first
-(reference) level; `Type S` and `Type M` describe the sign and size of
-significant estimates. All rates and their MCSEs are computed over
-`n_valid`, the runs with usable inference — inspect `$failures` for the
-rest. Zero targets report `Type I error`, the false-positive rate,
-instead of power.
+(reference) level. `Type S` is the share of significant estimates with
+the wrong sign, and `Type M` how much significant estimates overstate
+the true AMCE on average (1.08 means 8 percent too large). Both are
+small when power is high but grow quickly when it is low; see the
+[error-rates
+guide](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/error_rates.md#type-s-and-type-m-errors).
+All rates and their MCSEs are computed over `n_valid`, the runs with
+usable inference — inspect `$failures` for the rest. Zero targets report
+`Type I error`, the false-positive rate, instead of power.
 
 ## Heterogeneous preferences
 
@@ -84,11 +88,11 @@ guide](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/simulation_m
 
 ``` r
 
-power_sim(levels = c(2, 3), 
+power_sim(levels = c(2, 3),
           true_amce = list(0.05, c(-0.05, 0)),
-          units = 600, 
-          n_tasks = 5, 
-          sigma = 0.05, 
+          units = 600,
+          n_tasks = 5,
+          sigma = 0.05,
           seed = 2114)
 ```
 
@@ -124,8 +128,8 @@ subset(groups$performance, type == "difference")[, c("group", "attribute", "leve
 A difference compares the causal effect of the same level for the two
 named groups (the display label names the non-reference group first, its
 reference group second); it is not a test of overall favourability, and
-it depends on the attribute’s reference level. See the [Type I error
-guide](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/type_1_error.md#reading-the-output)
+it depends on the attribute’s reference level. See the [error-rates
+guide](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/error_rates.md#reading-the-output)
 for interpreting zero-target contrasts and their calibration
 uncertainty.
 
@@ -140,20 +144,20 @@ For a focal effect and a target power, compare candidate values of
 candidate_units <- c(200, 400, 600, 800)
 
 candidates <- lapply(candidate_units, function(n) {
-  power_sim(levels = c(2, 3), 
+  power_sim(levels = c(2, 3),
             true_amce = list(0.05, c(-0.05, 0)),
-            units = n, 
-            n_tasks = 5, 
-            sim_runs = 300, 
+            units = n,
+            n_tasks = 5,
+            sim_runs = 300,
             seed = 2114)
 })
 
 focal <- do.call(rbind, lapply(seq_along(candidates), function(i) {
   perf <- candidates[[i]]$performance[1, ]
-  data.frame(units = candidate_units[i], 
-            power = perf$power, 
+  data.frame(units = candidate_units[i],
+            power = perf$power,
             power_mcse = perf$power_mcse,
-             n_valid = perf$n_valid, 
+             n_valid = perf$n_valid,
              n_failed = sum(candidates[[i]]$failures$n_failed))
 }))
 
@@ -178,7 +182,7 @@ sample size that reaches the target.
 |----|----|
 | Understand the choice model, `sigma` and its assumptions | [simulation model](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/simulation_model.md) |
 | Choose a clustering/inference method | [clustering](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/clustering.md) |
-| Interpret power vs. Type I error, or check a null | [Type I error](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/type_1_error.md) |
+| Interpret power, Type I error, Type S and Type M, or check a null | [error rates](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/error_rates.md) |
 | Investigate calibration diagnostics or tune precision | [calibration](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/calibration.md) |
 | Compare with closed-form power formulas (cjpowR) | [closed-form comparison](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/closed_form.md) |
 | Compare with DeclareDesign | [DeclareDesign](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/declaredesign.md) |
