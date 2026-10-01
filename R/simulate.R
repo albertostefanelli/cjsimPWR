@@ -36,10 +36,15 @@
 #'   `true_amce` (and, with `sigma > 0`, whose respondent-level AMCEs have SD `sigma`), then verifies the
 #'   solution against fresh reference draws at a nominal 99% Monte Carlo confidence. Verification stops
 #'   when every true AMCE is within `tolerance` of its request and every AMCE SD is within
-#'   `min(0.005, 0.05 * sigma)`; otherwise calibration stops with an error. Exact enumeration concerns
-#'   profile combinations: designs with at most `exact_max_pairs` profile pairs are enumerated exactly,
-#'   while larger designs integrate over sampled profiles. With heterogeneity, integration over
-#'   respondent coefficients uses Monte Carlo draws even when profile pairs are enumerated exactly.
+#'   `min(0.005, 0.05 * sigma)`; otherwise calibration stops with an error. Exact integration concerns
+#'   profile combinations: equivalent differences between profiles are combined and opposite differences
+#'   are folded into one weighted row. Integration is exact when the active design has at most
+#'   `exact_max_pairs` ordered pairs and at most `exact_max_rows` folded rows, subject to a 256 MiB
+#'   budget for the reference and work matrices (not total R process memory), checked before allocation.
+#'   Larger designs integrate over sampled profiles; `exact_max_pairs = 1` always forces sampling.
+#'   With heterogeneity, respondent coefficients still require Monte Carlo integration.
+#'   The wider exact eligibility in version 0.3.0 changes seeded results and calibration random-number
+#'   use for newly eligible designs; previously exact designs change only up to rounding.
 #'   Calibration uses its own random seed
 #'   (`calibration_control$seed`) and leaves the caller's random numbers unchanged.
 #'
@@ -61,7 +66,8 @@
 #'   | `maxit` | 100 | Solver: maximum solver iterations. |
 #'   | `solver_tol` | 1e-6 | Solver: solver convergence tolerance. |
 #'   | `tolerance` | 0.001 | Solver: verification tolerance for AMCE and SD targets. |
-#'   | `exact_max_pairs` | 10000 | Integration: profile-pair count below which integration is exact. |
+#'   | `exact_max_pairs` | 100000000 | Integration: at most this many ordered profile pairs for exact integration; the row and memory limits also apply. |
+#'   | `exact_max_rows` | 20000 | Integration: at most this many folded profile-difference rows for exact integration. |
 #'   | `calibration_pairs` | 16384 | Integration: sampled profile pairs per solver iteration (when not exact). |
 #'   | `calibration_draws` | 2048 | Integration: respondent draws per profile pair while solving. |
 #'   | `verification_pairs` | 32768 | Integration: profile pairs sampled per verification batch. |

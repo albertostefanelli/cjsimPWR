@@ -78,15 +78,22 @@ Calibration runs once for each group of respondents, in three steps.
 
    For example, three attributes with 2, 3 and 5 levels give 2 × 3 × 5 = 30 possible candidate
    profiles. Either side of the screen can show any of them, so there are 30 × 30 = 900 possible pairs:
-   few enough to check every pair, like counting every ballot. The measurement is then exact (*exact
-   enumeration*). But each added attribute multiplies the count. A candidate conjoint with gender
+   accounted for exactly using 220 weighted rows of distinct profile differences. Equivalent
+   differences are combined, and opposite differences share one row without changing their total
+   contribution (*exact integration*). But each added attribute multiplies the count. A candidate conjoint with gender
    (2 levels), age (4), party (2), political experience (3), religion (4) and immigration stance (3)
-   has 576 profiles and 331,776 pairs. When a design has more than `exact_max_pairs` pairs (10,000 by
-   default, that is, more than 100 profiles), the package works like a poll instead: it averages over a
-   large random sample of pairs (*Monte Carlo integration*), and the measurement has a small margin of
-   error. Most realistic designs are in this second case. With `sigma > 0`, the package also averages
-   over a random sample of simulated respondents, so there is a margin of error even when every pair
-   is counted.
+   has 576 profiles and 331,776 pairs, compressed into 37,264 rows. Exact integration requires at most
+   `exact_max_pairs` pairs (100,000,000 by default) and at most `exact_max_rows` folded rows (20,000 by
+   default), with a pre-allocation 256 MiB budget for the reference and work matrices, not total R
+   process memory. This example exceeds the row limit, so the package works like a poll instead: it
+   averages over a large random sample of pairs (*Monte Carlo integration*), and the measurement has a
+   small margin of error. Seven binary attributes have 16,384 pairs but only 1,093 folded rows and now
+   use exact profile integration. Setting `exact_max_pairs = 1` still forces sampling. With heterogeneous
+   coefficients (`sigma > 0` or `latent_sigma > 0`), the package also averages over a random sample of
+   simulated respondents, so there is a margin of error even when profiles are integrated exactly.
+   The wider exact eligibility in version 0.3.0 changes seeded results and calibration random-number
+   use for newly eligible designs. Previously exact designs change only up to rounding; the caller's
+   random-number state remains preserved during calibration.
 2. **Verify.** Using fresh random samples, independent of those used in the search, the package checks
    that every AMCE is within `tolerance` of your request and, with `sigma > 0`, that every AMCE's SD is
    within `min(0.005, 0.05 * sigma)` of `sigma` (0.0025 when `sigma = 0.05`). The check passes only

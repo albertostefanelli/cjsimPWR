@@ -35,7 +35,8 @@ private_rng_seed <- function(seed) {
 
 dgp_controls <- function(control = list()) {
   defaults <- list(seed = 104729L, maxit = 100L, solver_tol = 1e-6, tolerance = 0.001,
-                   exact_max_pairs = 10000L, calibration_pairs = 16384L, calibration_draws = 2048L,
+                   exact_max_pairs = 100000000L, exact_max_rows = 20000L,
+                   calibration_pairs = 16384L, calibration_draws = 2048L,
                    verification_pairs = 32768L, verification_draws = 1024L,
                    verification_batches = 16L, max_verification_batches = 128L, max_attempts = 4L,
                    reference_margin = 0, max_reference_batches = 512L)
@@ -80,12 +81,34 @@ reference_dummies <- function(codes, n_levels) {
   }))
 }
 
-# Shared by reference construction and verification, including the homogeneous shortcut.
-exact_profile_eligible <- function(n_levels, exact_max_pairs) {
-  2 * sum(log(n_levels)) <= log(exact_max_pairs)
+# Analytical sizes, before any profile/difference allocation. Count in doubles to avoid integer
+# overflow; non-finite sizes fail eligibility. The workspace target allows four reference-sized
+# matrices (including construction temporaries) and four rows-by-128 probability work matrices,
+# not the whole R process's memory.
+exact_profile_size <- function(n_levels) {
+  levels <- as.double(n_levels)
+  rows <- (prod(levels * (levels - 1) + 1) - 1) / 2
+  columns <- sum(levels - 1)
+  matrix_bytes <- 8 * rows * columns
+  probability_bytes <- 8 * rows * 128
+  list(pairs = prod(levels)^2, rows = rows, columns = columns,
+       largest_allocation = max(matrix_bytes, probability_bytes),
+       workspace_bytes = 4 * matrix_bytes + 4 * probability_bytes)
 }
 
-# One zero difference (multiplicity L) and both signs of every distinct nonzero difference.
+exact_profile_fits <- function(size) {
+  is.finite(size$workspace_bytes) && size$workspace_bytes <= 256 * 1024^2 &&
+    size$largest_allocation / 8 <= .Machine$integer.max
+}
+
+# Shared by reference construction and verification, including the homogeneous shortcut.
+exact_profile_eligible <- function(n_levels, exact_max_pairs, exact_max_rows) {
+  size <- exact_profile_size(n_levels)
+  is.finite(size$pairs) && size$pairs <= exact_max_pairs && size$rows <= exact_max_rows &&
+    exact_profile_fits(size)
+}
+
+# Store only positive nonzero differences; the builder indexes their negatives and the zero block.
 # Positive representatives have their first nonzero dummy entry positive.
 profile_difference_block <- function(levels) {
   positive <- matrix(0, levels * (levels - 1) / 2, levels - 1)
@@ -99,13 +122,15 @@ profile_difference_block <- function(levels) {
       positive[row, b - 1L] <- -1
     }
   }
-  rbind(0, positive, -positive)
+  positive
 }
 
 exact_profile_reference <- function(n_levels) {
+  size <- exact_profile_size(n_levels)
+  if (!exact_profile_fits(size)) stop("exact profile reference exceeds the 256 MiB workspace budget.", call. = FALSE)
   sizes <- n_levels * (n_levels - 1) + 1
-  rows <- (prod(sizes) - 1) / 2
-  pairs <- prod(n_levels)^2
+  rows <- size$rows
+  pairs <- size$pairs
   blocks <- lapply(n_levels, profile_difference_block)
   columns <- split(seq_len(sum(n_levels - 1)), rep(seq_along(n_levels), n_levels - 1))
   delta <- matrix(0, rows, sum(n_levels - 1))
@@ -117,12 +142,15 @@ exact_profile_reference <- function(n_levels) {
     later <- seq_along(n_levels)[seq_along(n_levels) > k]
     indices <- expand.grid(c(list(1L + seq_len((sizes[k] - 1) / 2)), lapply(sizes[later], seq_len)))
     selected <- offset + seq_len(nrow(indices))
-    delta[selected, columns[[k]]] <- blocks[[k]][indices[[1]], , drop = FALSE]
+    delta[selected, columns[[k]]] <- blocks[[k]][indices[[1]] - 1L, , drop = FALSE]
     multiplicity <- rep(prod(n_levels[seq_len(k - 1L)]), nrow(indices))
     for (i in seq_along(later)) {
       j <- later[i]
-      delta[selected, columns[[j]]] <- blocks[[j]][indices[[i + 1L]], , drop = FALSE]
-      multiplicity <- multiplicity * ifelse(indices[[i + 1L]] == 1L, n_levels[j], 1)
+      index <- indices[[i + 1L]]
+      positive_rows <- (sizes[j] - 1) / 2
+      sign <- ifelse(index == 1L, 0, ifelse(index <= positive_rows + 1L, 1, -1))
+      delta[selected, columns[[j]]] <- blocks[[j]][(index - 2L) %% positive_rows + 1L, , drop = FALSE] * sign
+      multiplicity <- multiplicity * ifelse(index == 1L, n_levels[j], 1)
     }
     # The omitted all-zero row has zero contribution. Its mass must NOT be redistributed.
     mass[selected] <- 2 * multiplicity / pairs
@@ -139,8 +167,8 @@ exact_profile_reference <- function(n_levels) {
 # Under independent uniform randomization, AMCE = Cov(Z)^-1 E[(Z1-Z2)(P1-.5)]/2.
 # Exact integration and the MC oracle use the same identity. MC uses a control variate with
 # known expectation beta/4 to reduce profile-integration error.
-profile_reference <- function(n_levels, pairs, exact_max_pairs) {
-  if (exact_profile_eligible(n_levels, exact_max_pairs)) return(exact_profile_reference(n_levels))
+profile_reference <- function(n_levels, pairs, exact_max_pairs, exact_max_rows) {
+  if (exact_profile_eligible(n_levels, exact_max_pairs, exact_max_rows)) return(exact_profile_reference(n_levels))
   z1 <- reference_dummies(draw_profiles(n_levels, pairs), n_levels)
   z2 <- reference_dummies(draw_profiles(n_levels, pairs), n_levels)
   delta <- z1 - z2
@@ -176,9 +204,13 @@ conditional_amces <- function(beta, reference) {
 }
 
 reference_sample <- function(n_levels, control, pairs, draws, heterogeneous, exact_reference = NULL) {
-  ref <- if (is.null(exact_reference)) profile_reference(n_levels, pairs, control$exact_max_pairs) else exact_reference
+  ref <- if (is.null(exact_reference)) {
+    profile_reference(n_levels, pairs, control$exact_max_pairs, control$exact_max_rows)
+  } else exact_reference
   # Independent profile samples remove the squared-integration-error bias from the second moment.
-  ref2 <- if (ref$exact || !heterogeneous) NULL else profile_reference(n_levels, pairs, control$exact_max_pairs)
+  ref2 <- if (ref$exact || !heterogeneous) NULL else {
+    profile_reference(n_levels, pairs, control$exact_max_pairs, control$exact_max_rows)
+  }
   U <- if (heterogeneous) matrix(stats::rnorm(draws * (sum(n_levels - 1) + length(n_levels))), draws) else NULL
   list(ref = ref, ref2 = ref2, U = U, attribute = rep(seq_along(n_levels), n_levels - 1))
 }
@@ -248,9 +280,10 @@ verify_dgp <- function(gamma, latent_sd, n_levels, control, target, sigma = 0,
                        structural_zero = rep(FALSE, length(gamma)), baseline_sd = NULL,
                        fixed_batches = NULL, acceptance_margin = 0, exact_reference = NULL) {
   heterogeneous <- any(latent_sd > 0)
-  exact <- exact_profile_eligible(n_levels, control$exact_max_pairs)
+  exact <- exact_profile_eligible(n_levels, control$exact_max_pairs, control$exact_max_rows)
   if (exact && is.null(exact_reference)) {
-    exact_reference <- profile_reference(n_levels, control$verification_pairs, control$exact_max_pairs)
+    exact_reference <- profile_reference(n_levels, control$verification_pairs, control$exact_max_pairs,
+                                         control$exact_max_rows)
   }
   if (exact && !heterogeneous) {
     sample <- reference_sample(n_levels, control, control$verification_pairs, 2, FALSE, exact_reference)
@@ -508,8 +541,8 @@ calibrate_dgp_group <- function(design, requested, sigma, latent_sigma, control)
       method = "exact zero"))))
   }
   lv <- design$n_levels[active_attributes]
-  exact_reference <- if (exact_profile_eligible(lv, control$exact_max_pairs)) {
-    profile_reference(lv, control$calibration_pairs, control$exact_max_pairs)
+  exact_reference <- if (exact_profile_eligible(lv, control$exact_max_pairs, control$exact_max_rows)) {
+    profile_reference(lv, control$calibration_pairs, control$exact_max_pairs, control$exact_max_rows)
   } else NULL
   target <- requested[active]
   q <- length(target)

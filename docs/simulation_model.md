@@ -109,7 +109,11 @@ from 0.05 to 0.0494 changes two-sided normal-test power at the 5% level from abo
 This is a sensitivity calculation, not an exact prediction for a fitted clustered test. Inspect
 `target_error_bound` relative to the study's standard error and tighten calibration controls when that
 sensitivity matters. Increasing `sim_runs` alone does not reduce calibration error. Calibration takes
-seconds for small designs but can take many minutes when `sigma > 0` and profiles must be sampled.
+seconds for small designs. Compressed exact profile integration now covers designs within both the
+pair and folded-row budgets (defaults: 100,000,000 pairs and 20,000 rows), subject to a pre-allocation
+memory check. Heterogeneous coefficients still require Monte Carlo integration, and calibration can
+take many minutes for larger exact references or sampled profiles. Newly eligible designs have changed
+seeded results and calibration random-number use in version 0.3.0.
 See the [calibration guide](calibration.md) for the full mechanics, diagnostics and precision controls,
 and the `simulate_experiment()` help for the parameter contract.
 

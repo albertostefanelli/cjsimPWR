@@ -84,10 +84,15 @@ Draws the tasks of a paired conjoint experiment and simulates each respondent's 
 \code{true_amce} (and, with \code{sigma > 0}, whose respondent-level AMCEs have SD \code{sigma}), then verifies the
 solution against fresh reference draws at a nominal 99\% Monte Carlo confidence. Verification stops
 when every true AMCE is within \code{tolerance} of its request and every AMCE SD is within
-\code{min(0.005, 0.05 * sigma)}; otherwise calibration stops with an error. Exact enumeration concerns
-profile combinations: designs with at most \code{exact_max_pairs} profile pairs are enumerated exactly,
-while larger designs integrate over sampled profiles. With heterogeneity, integration over
-respondent coefficients uses Monte Carlo draws even when profile pairs are enumerated exactly.
+\code{min(0.005, 0.05 * sigma)}; otherwise calibration stops with an error. Exact integration concerns
+profile combinations: equivalent differences between profiles are combined and opposite differences
+are folded into one weighted row. Integration is exact when the active design has at most
+\code{exact_max_pairs} ordered pairs and at most \code{exact_max_rows} folded rows, subject to a 256 MiB
+budget for the reference and work matrices (not total R process memory), checked before allocation.
+Larger designs integrate over sampled profiles; \code{exact_max_pairs = 1} always forces sampling.
+With heterogeneity, respondent coefficients still require Monte Carlo integration.
+The wider exact eligibility in version 0.3.0 changes seeded results and calibration random-number
+use for newly eligible designs; previously exact designs change only up to rounding.
 Calibration uses its own random seed
 (\code{calibration_control$seed}) and leaves the caller's random numbers unchanged.
 
@@ -107,7 +112,8 @@ also listed in \code{attr(data, "dgp")$control}):\tabular{lrl}{
    \code{maxit} \tab 100 \tab Solver: maximum solver iterations. \cr
    \code{solver_tol} \tab 1e-6 \tab Solver: solver convergence tolerance. \cr
    \code{tolerance} \tab 0.001 \tab Solver: verification tolerance for AMCE and SD targets. \cr
-   \code{exact_max_pairs} \tab 10000 \tab Integration: profile-pair count below which integration is exact. \cr
+   \code{exact_max_pairs} \tab 100000000 \tab Integration: at most this many ordered profile pairs for exact integration; the row and memory limits also apply. \cr
+   \code{exact_max_rows} \tab 20000 \tab Integration: at most this many folded profile-difference rows for exact integration. \cr
    \code{calibration_pairs} \tab 16384 \tab Integration: sampled profile pairs per solver iteration (when not exact). \cr
    \code{calibration_draws} \tab 2048 \tab Integration: respondent draws per profile pair while solving. \cr
    \code{verification_pairs} \tab 32768 \tab Integration: profile pairs sampled per verification batch. \cr

@@ -7,7 +7,11 @@ below.
 
 ## Simulation model
 
-* Compressed exact profile integration makes calibration faster, with results unchanged up to rounding.
+* Compressed exact profile integration makes calibration faster, with results unchanged up to rounding
+  for designs already using exact integration. The new `exact_max_rows` control defaults to 20,000;
+  `exact_max_pairs` now defaults to 100,000,000, with a pre-allocation memory budget. Newly eligible
+  designs have changed seeded results and calibration random-number use. `exact_max_pairs = 1` still
+  forces sampling.
 * Choices come from a logit model calibrated so that the population AMCEs match the requested ones.
   Under the earlier choice rule, score coefficients of 0.10 and 0.20 gave generated AMCEs of about
   0.106 and 0.209 for two binary attributes, with both profiles drawn independently.
@@ -58,8 +62,8 @@ below.
   error. Its calculation and threshold are unchanged; `null_status`, `null_size_sensitivity` and the
   calibrated print decoration have been removed from the unreleased interface. Numerical truth and
   reference uncertainty remain available. The warning is not a guarantee about clustered inference.
-* Clarified that profile enumeration depends on the profile-pair count, not on heterogeneity;
-  heterogeneous coefficients still require Monte Carlo integration.
+* Exact profile integration depends on the pair and folded-row budgets and a memory check;
+  heterogeneous coefficients still require Monte Carlo integration even with exact profiles.
 * Type S and Type M errors follow Gelman and Carlin (2014): Type M is the mean of
   `|estimate| / |true AMCE|` over significant runs. Version 0.2.1 averaged the signed ratio against
   the input, which understated Type M at low power, and reported Type S = 1 and an undefined Type M
