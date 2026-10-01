@@ -51,10 +51,11 @@ coefficient scale. The implied AMCE SDs are reported in the model's \code{truth}
 
 \item{model}{optional prepared \code{cj_dgp} object, from a previous simulation's \code{dgp} attribute or
 \code{\link[=power_sim]{power_sim()}}'s \code{model}, for repeated experiments without recalibration.
-Supply the same design and omit true_amce, sigma, dgp, latent_sigma and calibration_control.}
+Supply the same design and omit true_amce, sigma, dgp, latent_sigma and calibration_control;
+\code{units} and \code{n_tasks} may differ from the original call.}
 
 \item{calibration_control}{optional named list of calibration settings; see the Calibration section
-of \code{\link[=simulate_experiment]{simulate_experiment()}} below. \code{reference_margin = 0.5} enables experimental precision planning;
+of \code{\link[=simulate_experiment]{simulate_experiment()}}. \code{reference_margin = 0.5} enables experimental precision planning;
 its default of zero retains the original calibration and reference budgets.}
 }
 \value{
@@ -105,7 +106,7 @@ quietly with \code{accepted = FALSE} (inconclusive); one that lies wholly outsid
 warning. Separately calibrated group contrasts match their requests within \code{tolerance} by verifying
 each group's AMCE within half that tolerance; they are not forced to zero.
 
-\strong{Controls.} \code{calibration_control} accepts these named settings (defaults from \code{dgp_controls()},
+\strong{Controls.} \code{calibration_control} accepts these named settings (defaults below,
 also listed in \code{attr(data, "dgp")$control}):\tabular{lrl}{
    Setting \tab Default \tab Role \cr
    \code{seed} \tab 104729 \tab Solver: calibration's own random seed, independent of the caller's RNG. \cr
@@ -153,4 +154,7 @@ attr(mixed, "dgp")$truth[, c("attribute", "level", "true_amce", "amce_sd")]
 
 # reuse a calibrated model for another experiment
 second <- simulate_experiment(design, units = 100, n_tasks = 3, model = attr(data, "dgp"))
+}
+\seealso{
+\code{\link[=conjoint_design]{conjoint_design()}}, \code{\link[=estimate_amce]{estimate_amce()}}, \code{\link[=power_sim]{power_sim()}}
 }

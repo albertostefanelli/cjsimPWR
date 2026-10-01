@@ -91,7 +91,7 @@ small subgroups, even if the joint fit has many respondents.}
 coefficient scale. The implied AMCE SDs are reported in the model's \code{truth} table.}
 
 \item{calibration_control}{optional named list of calibration settings; see the Calibration section
-of \code{\link[=simulate_experiment]{simulate_experiment()}} below. \code{reference_margin = 0.5} enables experimental precision planning;
+of \code{\link[=simulate_experiment]{simulate_experiment()}}. \code{reference_margin = 0.5} enables experimental precision planning;
 its default of zero retains the original calibration and reference budgets.}
 
 \item{keep_runs}{Retain the estimates, inference and failure reasons from every run? Default FALSE.}

@@ -27,9 +27,10 @@
 #'   coefficient scale. The implied AMCE SDs are reported in the model's `truth` table.
 #' @param model optional prepared `cj_dgp` object, from a previous simulation's `dgp` attribute or
 #'   [power_sim()]'s `model`, for repeated experiments without recalibration.
-#'   Supply the same design and omit true_amce, sigma, dgp, latent_sigma and calibration_control.
+#'   Supply the same design and omit true_amce, sigma, dgp, latent_sigma and calibration_control;
+#'   `units` and `n_tasks` may differ from the original call.
 #' @param calibration_control optional named list of calibration settings; see the Calibration section
-#'   of [simulate_experiment()] below. `reference_margin = 0.5` enables experimental precision planning;
+#'   of [simulate_experiment()]. `reference_margin = 0.5` enables experimental precision planning;
 #'   its default of zero retains the original calibration and reference budgets.
 #'
 #' @section Calibration: The package solves for coefficients whose AMCEs approximate
@@ -57,7 +58,7 @@
 #'   warning. Separately calibrated group contrasts match their requests within `tolerance` by verifying
 #'   each group's AMCE within half that tolerance; they are not forced to zero.
 #'
-#'   **Controls.** `calibration_control` accepts these named settings (defaults from `dgp_controls()`,
+#'   **Controls.** `calibration_control` accepts these named settings (defaults below,
 #'   also listed in `attr(data, "dgp")$control`):
 #'
 #'   | Setting | Default | Role |
@@ -104,6 +105,7 @@
 #'
 #'   Calibration and reference calculations preserve the caller's RNG exactly; only sampling the
 #'   experiment itself (the returned profile rows) advances it.
+#' @seealso [conjoint_design()], [estimate_amce()], [power_sim()]
 #' @export
 #' @md
 #' @examples
