@@ -29,6 +29,7 @@
 #'   [power_sim()]'s `model`, for repeated experiments without recalibration.
 #'   Supply the same design and omit true_amce, sigma, dgp, latent_sigma and calibration_control;
 #'   `units` and `n_tasks` may differ from the original call.
+#'   A latent model from [utility_model()] additionally supplies one score column per non-dummy term.
 #' @param calibration_control optional named list of calibration settings; see the Calibration section
 #'   of [simulate_experiment()]. `reference_margin = 0.5` enables experimental precision planning;
 #'   its default of zero retains the original calibration and reference budgets.
@@ -105,6 +106,10 @@
 #'
 #'   Calibration and reference calculations preserve the caller's RNG exactly; only sampling the
 #'   experiment itself (the returned profile rows) advances it.
+#'   With a latent model, `dgp` contains its utility terms, coefficient parameters and population truths.
+#'   Score columns reveal only the scores of levels shown in each profile; unseen ratings and matches
+#'   cannot be reconstructed from them. Respondent variables persist across tasks. No separate
+#'   respondent-table attribute is attached.
 #' @seealso [conjoint_design()], [estimate_amce()], [power_sim()]
 #' @export
 #' @md
@@ -157,6 +162,14 @@ simulate_experiment <- function(design, true_amce = NULL, units, n_tasks, groups
     data$group <- groups[group_of[data$respondent]]
   }
 
+  if (identical(model$specification, "latent")) {
+    latent <- draw_latent_respondents(model, group_of)
+    coef_respondent <- latent$beta
+    if (any(!is.finite(coef_respondent))) {
+      stop("nonfinite latent effective coefficients; inspect coefficient and score magnitudes.", call. = FALSE)
+    }
+    data <- latent_score_columns(data, model, latent$variables)
+  } else {
   # Keep the draw order stable: coefficient deviations, reference utilities, then choices.
   deviations <- matrix(stats::rnorm(length(group_of) * ncol(model$gamma)), nrow = length(group_of))
   coef_respondent <- model$gamma[group_of, , drop = FALSE] + deviations * model$raw_sd[group_of, , drop = FALSE]
@@ -166,8 +179,13 @@ simulate_experiment <- function(design, true_amce = NULL, units, n_tasks, groups
     attribute <- rep(seq_along(design$n_levels), design$n_levels - 1)
     coef_respondent <- coef_respondent - base[, attribute, drop = FALSE]
   }
+  }
   score <- profile_scores(data, design, coef_respondent)
   first <- data$profile == 1L
+  if (identical(model$specification, "latent") &&
+      (any(!is.finite(score)) || any(!is.finite(score[first] - score[!first])))) {
+    stop("nonfinite latent utilities; inspect coefficient and score magnitudes.", call. = FALSE)
+  }
   p1 <- stats::plogis(score[first] - score[!first])
   y1 <- as.integer(stats::runif(length(p1)) < p1)
   data$y[first] <- y1

@@ -56,6 +56,61 @@ term_rating <- function(attribute, mean, sd, coef, coef_sd = 0) {
                  coef_sd = coef_sd), class = "cj_utility_term")
 }
 
+#' Prepare a latent utility model
+#'
+#' Specify coefficients directly on the logit utility scale and compute population truths for paired
+#' logistic regression, with optional AMCE truths. Profiles are independently and uniformly randomized.
+#'
+#' @param design a `cj_design` from [conjoint_design()].
+#' @param terms nonempty list of terms from [term_dummy()], [term_score()], [term_match()] or
+#'   [term_rating()]. Every attribute needs at least one term and at most one dummy term. Unnamed
+#'   terms use the attribute name for dummies and `attribute_score`, `attribute_match` or
+#'   `attribute_rating` otherwise. List names may override non-dummy names; they must be unique and
+#'   differ from all attribute names and reserved simulation columns.
+#' @param groups `NULL`, or unique respondent-group names. Named numeric-argument lists must match
+#'   these groups exactly; ordinary vectors are shared across groups.
+#' @param amce whether to compute and cache AMCE means and respondent-level standard deviations.
+#' @param control named integration controls: `seed`, `exact_max_pairs`, `exact_max_rows`,
+#'   `verification_pairs`, `verification_draws`, `verification_batches`, `paired_cells` and
+#'   `exact_max_cells`. Budgets are fixed; inspect `diagnostics` and reference half-widths for precision.
+#'   The default `paired_cells` is 2,097,152 per group per batch. Numerical truth construction can
+#'   take several minutes; reuse the prepared model across power analyses.
+#'
+#' @details The default paired analysis contains every utility term and must be identified in every
+#'   group. Fixed coefficients with exactly matching analysis coding have paired targets equal to their
+#'   input means. Under heterogeneity or a changed analysis, the paired target is a population logistic
+#'   projection. AMCE truths are on the probability scale. A certified zero mean does not imply zero
+#'   respondent-level variation. Truth calculations preserve the caller's random-number state and use
+#'   reference streams separate from simulated experiments.
+#'
+#' @return A prepared `cj_dgp` with `specification = "latent"`, normalized `terms`, coefficient
+#'   `parameters`, population `truth`, numerical `diagnostics` and resolved `control`. Pass it to
+#'   [simulate_experiment()] or [power_sim()]. Simulation adds a per-profile score column for each
+#'   non-dummy term. These columns reveal scores at shown levels, not ratings of unseen levels.
+#' @seealso [estimate_paired()], [simulate_experiment()], [power_sim()],
+#'   [paired-logit guide](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/paired_logit.md)
+#' @export
+#' @md
+#' @examples
+#' design <- conjoint_design(list(quality = c("low", "high"), democracy = c("D+", "D-")))
+#' model <- utility_model(design, list(term_score("quality", c(0, 2), 0.3),
+#'                                     term_dummy("democracy", -0.8)))
+#' model$truth
+utility_model <- function(design, terms, groups = NULL, amce = FALSE, control = list()) {
+  if (!is.logical(amce) || length(amce) != 1L || is.na(amce)) {
+    stop("`amce` must be one non-missing logical value.", call. = FALSE)
+  }
+  model <- latent_specification(design, terms, groups, control)
+  analysis <- paired_analysis(design, names(model$terms), model)
+  gram <- population_gram(model, analysis)
+  result <- latent_truth(model, analysis, amce)
+  model$truth <- result$truth
+  model$diagnostics <- result$diagnostics
+  if (is.null(model$diagnostics$population_gram)) model$diagnostics$population_gram <- gram
+  class(model) <- "cj_dgp"
+  model
+}
+
 # Constructors deliberately defer design-dependent validation to this normalization boundary.
 normalize_terms <- function(design, terms, groups) {
   if (!is.list(terms) || !length(terms)) {

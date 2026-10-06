@@ -161,7 +161,7 @@ exact_profile_reference <- function(n_levels) {
     j <- columns[[k]]
     weights[, j] <- (delta[, j, drop = FALSE] + rowSums(delta[, j, drop = FALSE])) * n_levels[k] / 2 * mass
   }
-  list(delta = delta, weights = weights, exact = TRUE, pairs = as.integer(pairs))
+  list(delta = delta, weights = weights, exact = TRUE, pairs = as.integer(pairs), mass = mass)
 }
 
 # Under independent uniform randomization, AMCE = Cov(Z)^-1 E[(Z1-Z2)(P1-.5)]/2.
