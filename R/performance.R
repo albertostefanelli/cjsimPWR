@@ -204,8 +204,8 @@ print.cj_performance <- function(x, digits = 3, ...) {
   labels <- c(power = "Power", type_1_error = "Type I error", type_s = "Type S", type_m = "Type M",
               coverage = "Coverage")
   out <- data.frame(row.names = seq_len(nrow(x)))
-  for (col in intersect(c("type", "group", "attribute", "level", "true_amce"), names(x))) {
-    out[[col]] <- if (col == "true_amce") round(x[[col]], 4) else x[[col]]
+  for (col in intersect(c("estimator", "scale", "type", "group", "term", "attribute", "level", "true_amce", "true_value"), names(x))) {
+    out[[col]] <- if (col %in% c("true_amce", "true_value")) round(x[[col]], 4) else x[[col]]
   }
   for (m in names(labels)) {
     if (m %in% names(x) && !all(is.na(x[[m]]))) {

@@ -14,6 +14,15 @@
 #' @param cores Positive whole number of workers, default 1. Values above 1 use base R PSOCK workers;
 #'   at most `sim_runs` workers are started. No global future plan or options are changed.
 #' @param keep_runs Retain the estimates, inference and failure reasons from every run? Default FALSE.
+#' @param model Optional prepared calibrated or latent `cj_dgp`. Its design and omitted groups are
+#'   adopted. Omit all model-building arguments and deprecated aliases when supplying a model.
+#' @param estimators Unique nonempty subset of `c("amce", "paired")`. Defaults to AMCE for calibrated
+#'   models and paired logit for models from [utility_model()]. Paired power requires a latent model.
+#' @param paired_terms Attributes or generated score columns to include in the paired analysis.
+#'   Defaults to all utility terms. Available only when the paired estimator is selected.
+#' @param scale Paired reporting scale: `"latent"` or `"probability"`. Paired-only power defaults to
+#'   latent coefficients. Selecting both estimators requires probability scale and chooses it with
+#'   a message when omitted. Paired probability reporting supports CR1 only.
 #' @param n_levels,group_name,true_coef Deprecated aliases for `levels`, `groups`, and `true_amce`,
 #'   kept for backward compatibility with a warning on use. `true_coef` is interpreted as AMCE targets
 #'   for the calibrated logit model, not the score coefficients of versions up to 0.2.1.
@@ -28,6 +37,17 @@
 #'   has its own seed argument in `calibration_control`. Equal seed values can overlap calibration and
 #'   experiment draws; the final reference uses a fresh substream. The caller's random-number state,
 #'   including its normal-generator kind, is restored after the call.
+#'   Latent truth calculations allocate separate reference substreams, including when their seed equals
+#'   the experiment seed. Changing estimators, analysis terms or truth caches leaves experiments unchanged.
+#'
+#' @section Latent utility models: [utility_model()] prepares a model from logit coefficients and
+#'   respondent score distributions. Paired latent bias and coverage use the population target of the
+#'   selected analysis; under misspecification this can differ from the input coefficients. Probability
+#'   output uses the true population AMCE for both estimators. Truth rows add `estimator`, `scale`,
+#'   `term`, `true_value`, certified `null` and `sign_resolved`; `input` retains a matching utility
+#'   coefficient separately. A sign warning leaves Type S/M available and identifies whether increasing
+#'   integration precision or inspecting numerical diagnostics is appropriate. See the
+#'   [paired logit guide](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/paired_logit.md).
 #'
 #' @section Interpreting results: Bias and coverage use `true_amce`, the numerical reference for the
 #'   generated population AMCE, with its uncertainty retained. Calibrated effects match
@@ -107,7 +127,20 @@ power_sim <- function(levels = NULL, true_amce = NULL, units, n_tasks, groups = 
                       alpha = 0.05, vcov = c("CR1", "CR2"), sim_runs = 1000, seed, cores = 1,
                       inference = NULL, latent_sigma = NULL, calibration_control = list(),
                       keep_runs = FALSE, n_levels = NULL, group_name = NULL, true_coef = NULL,
-                      sigma.u_k = NULL, n_attributes = NULL) {
+                      sigma.u_k = NULL, n_attributes = NULL,
+                      model = NULL, estimators = NULL, paired_terms = NULL, scale = NULL) {
+  if (!is.null(model)) {
+    if (!inherits(model, "cj_dgp") || !identical(model$dgp, "logit")) {
+      stop("`model` must be a prepared logit cj_dgp.", call. = FALSE)
+    }
+    if (!missing(levels) || !missing(true_amce) || !missing(sigma) || !missing(latent_sigma) ||
+        !missing(dgp) || !missing(calibration_control) || !missing(n_levels) ||
+        !missing(group_name) || !missing(true_coef) || !missing(sigma.u_k) || !missing(n_attributes)) {
+      stop("with a prepared `model`, omit levels, true_amce, sigma, latent_sigma, dgp, calibration_control and deprecated aliases.", call. = FALSE)
+    }
+    if (missing(groups)) groups <- model$groups
+    if (!identical(groups, model$groups)) stop("`groups` must match the prepared model's order.", call. = FALSE)
+  }
   if (!missing(n_levels)) {
     deprecated_power_arg("n_levels", "levels", !missing(levels))
     levels <- n_levels
@@ -128,7 +161,7 @@ power_sim <- function(levels = NULL, true_amce = NULL, units, n_tasks, groups = 
       "It is used as the SD of respondent-level AMCEs on the probability scale, as in versions up to 0.2.1.")
     sigma <- sigma.u_k
   }
-  design <- conjoint_design(levels)
+  design <- if (is.null(model)) conjoint_design(levels) else model$design
   if (!missing(n_attributes)) {
     deprecated_power_arg("n_attributes", "levels")
     if (positive_count(n_attributes, "n_attributes") != length(design$levels)) {
@@ -150,7 +183,36 @@ power_sim <- function(levels = NULL, true_amce = NULL, units, n_tasks, groups = 
   }
   vcov <- match.arg(vcov)
   inference <- check_inference(vcov, inference, alpha)
-  model <- prepare_dgp(design, true_amce, groups, sigma, dgp, latent_sigma, calibration_control)
+  latent <- !is.null(model) && identical(model$specification, "latent")
+  if (is.null(estimators)) estimators <- if (latent) "paired" else "amce"
+  if (!is.character(estimators) || !length(estimators) || anyNA(estimators) ||
+      anyDuplicated(estimators) || any(!estimators %in% c("amce", "paired"))) {
+    stop("`estimators` must be a nonempty unique subset of c('amce', 'paired').", call. = FALSE)
+  }
+  if ("paired" %in% estimators) {
+    if (!latent) stop("paired power requires a latent `model` from utility_model().", call. = FALSE)
+    if (is.null(scale)) {
+      scale <- if (length(estimators) == 2L) "probability" else "latent"
+      if (length(estimators) == 2L) message("Paired estimates are reported as AMCEs on the probability scale. Use estimators = 'paired' for latent coefficients.")
+    }
+    scale <- match.arg(scale, c("latent", "probability"))
+    if (length(estimators) == 2L && scale != "probability") {
+      stop("both estimators require `scale = 'probability'`.", call. = FALSE)
+    }
+    if (vcov == "CR2" && scale == "probability") {
+      stop("paired probability output does not support CR2.", call. = FALSE)
+    }
+  } else if (!is.null(paired_terms) || !is.null(scale)) {
+    stop("`paired_terms` and `scale` require the paired estimator.", call. = FALSE)
+  }
+  if (latent) return(power_latent(model, units, n_tasks, estimators, paired_terms, scale,
+                                vcov, inference, alpha, sim_runs, seed, cores, keep_runs))
+  if (is.null(model)) {
+    model <- prepare_dgp(design, true_amce, groups, sigma, dgp, latent_sigma, calibration_control)
+  } else {
+    sigma <- model$sigma
+    latent_sigma <- model$latent_sigma
+  }
   truth <- data.frame(effect_id = seq_len(nrow(model$truth)), model$truth, row.names = NULL)
   worker <- power_worker(model, units, n_tasks, vcov, inference, alpha)
   workers <- min(cores, sim_runs)
@@ -227,8 +289,8 @@ positive_count <- function(x, arg) {
 }
 
 # Exact tuple matching: display labels and delimiter-containing user names are never parsed.
-match_effect_rows <- function(template, data) {
-  columns <- c("type", "group_name", "reference_group", "attribute", "level", "reference_level")
+match_effect_rows <- function(template, data,
+                              columns = c("type", "group_name", "reference_group", "attribute", "level", "reference_level")) {
   codes <- lapply(columns, function(nm) match(data[[nm]], unique(template[[nm]])))
   if (anyNA(unlist(codes))) stop("estimated effects do not match the design.", call. = FALSE)
   keys <- do.call(paste, c(codes, sep = ":"))
@@ -288,7 +350,8 @@ power_worker <- function(model, units, n_tasks, vcov, inference, alpha) {
   }), envir = env)
 }
 
-power_failures <- function(runs, truth) {
+power_failures <- function(runs, truth,
+                           labels = c("effect_id", "type", "group", "group_name", "reference_group", "attribute", "level", "reference_level")) {
   failed <- runs[runs$status == "failed", c("effect_id", "failure_reason", "error_message"), drop = FALSE]
   counts <- unique(failed)
   counts$n_failed <- vapply(seq_len(nrow(counts)), function(i) {
@@ -296,9 +359,7 @@ power_failures <- function(runs, truth) {
           if (is.na(counts$error_message[i])) is.na(failed$error_message)
           else !is.na(failed$error_message) & failed$error_message == counts$error_message[i])
   }, integer(1))
-  labels <- truth[match(counts$effect_id, truth$effect_id),
-                  c("effect_id", "type", "group", "group_name", "reference_group", "attribute", "level", "reference_level"),
-                  drop = FALSE]
+  labels <- truth[match(counts$effect_id, truth$effect_id), labels, drop = FALSE]
   data.frame(labels, counts[c("failure_reason", "error_message", "n_failed")], row.names = NULL)
 }
 
@@ -306,6 +367,9 @@ power_failures <- function(runs, truth) {
 print.cj_power <- function(x, digits = 3, ...) {
   cat("Conjoint simulation:", x$settings$sim_runs, "runs;", x$settings$dgp, "DGP;",
       x$settings$vcov, "/", x$settings$inference, "inference.\n")
+  if (identical(x$settings$specification, "latent")) {
+    cat("Estimators:", paste(x$settings$estimators, collapse = ", "), "; scale:", x$settings$scale, "\n")
+  }
   print(x$performance, digits = digits, ...)
   if (nrow(x$failures)) cat("See $failures for counts and reasons by effect.\n")
   invisible(x)
