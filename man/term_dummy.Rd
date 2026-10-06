@@ -18,8 +18,8 @@ term_rating(attribute, mean, sd, coef, coef_sd = 0)
 \arguments{
 \item{attribute}{name of one design attribute.}
 
-\item{coef}{coefficient means: one value per non-reference level for a dummy term, otherwise one
-unnamed scalar. A named list supplies separate values for each group.}
+\item{coef}{coefficient means on the log-odds scale: one value per non-reference level for a dummy
+term, otherwise one unnamed scalar. A named list supplies separate values for each group.}
 
 \item{coef_sd}{coefficient standard deviations, with the same shape as \code{coef}. An unnamed scalar
 may be repeated across a dummy term's coefficients. The default is zero.}
@@ -46,6 +46,18 @@ Level vectors follow design order when unnamed; names must match the complete re
 set of level labels and are reordered to design order. Each numeric argument may instead be a
 list named by exactly the model's groups. Only unnamed scalar standard deviations are recycled.
 Different terms' respondent variables and coefficient deviations are independent within group.
+
+With a fixed coefficient, a one-unit increase in a profile's score changes its log-odds of being
+chosen by \code{coef}, holding the other profile and scores fixed. If the profiles otherwise have equal
+utility, a one-unit score advantage gives choice probability \code{plogis(coef)}: for example,
+\code{plogis(0.4)} is about 0.60. This conditional choice probability is not an AMCE, which averages
+changes over the other randomized attributes, opposing profiles and respondents. With coefficient
+heterogeneity, apply this interpretation to an individual's coefficient; \code{plogis(coef)} alone
+does not give the population choice probability.
+
+For party levels \code{c("A", "B", "C")}, \code{share = c(.4, .3, .2)} means 40 percent of respondents
+match A, 30 percent match B, 20 percent match C and 10 percent match none. Matching increases
+utility when its coefficient is positive.
 }
 \examples{
 term_dummy("democracy", coef = -0.8, coef_sd = 0.3)

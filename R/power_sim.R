@@ -19,6 +19,7 @@
 #' @param estimators Unique nonempty subset of `c("amce", "paired")`. Defaults to AMCE for calibrated
 #'   models and paired logit for models from [utility_model()]. Paired power requires a latent model.
 #' @param paired_terms Attributes or generated score columns to include in the paired analysis.
+#'   Custom latent truths are cached by ordered analysis in the returned `model$analysis_truths`.
 #'   Defaults to all utility terms. Available only when the paired estimator is selected.
 #' @param scale Paired reporting scale: `"latent"` or `"probability"`. Paired-only power defaults to
 #'   latent coefficients. Selecting both estimators requires probability scale and chooses it with
@@ -105,7 +106,11 @@
 #'   * `settings`: resolved design, sample sizes, DGP, inference, seeds, worker count and controls.
 #'   * `failures`: counts by effect, failure reason and error message; empty when no inference fails.
 #'   * `runs`: per-run estimates with `run` and `effect_id`, or NULL when `keep_runs = FALSE`.
-#'   * `model`: the prepared DGP, reusable with [simulate_experiment()].
+#'   * `model`: the prepared DGP, reusable with [simulate_experiment()] and [power_sim()]. Assign
+#'     `model <- result$model` to retain newly computed AMCE and custom-analysis truth caches;
+#'     `model$truth` always describes the default analysis. Latent `truth` and `performance` use
+#'     `true_value` and include `in_analysis`: paired probability rows for omitted attributes are
+#'     marked `FALSE`, while their targets remain the full population AMCEs.
 #' @seealso [conjoint_design()], [simulate_experiment()], [estimate_amce()], [summarise_runs()]
 #' @export
 #' @md
@@ -368,7 +373,7 @@ print.cj_power <- function(x, digits = 3, ...) {
   cat("Conjoint simulation:", x$settings$sim_runs, "runs;", x$settings$dgp, "DGP;",
       x$settings$vcov, "/", x$settings$inference, "inference.\n")
   if (identical(x$settings$specification, "latent")) {
-    cat("Estimators:", paste(x$settings$estimators, collapse = ", "), "; scale:", x$settings$scale, "\n")
+    cat("Estimators: ", paste(x$settings$estimators, collapse = ", "), "; scale: ", x$settings$scale, "\n", sep = "")
   }
   print(x$performance, digits = digits, ...)
   if (nrow(x$failures)) cat("See $failures for counts and reasons by effect.\n")

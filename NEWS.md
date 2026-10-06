@@ -1,5 +1,12 @@
 # cjsimPWR 0.3.1
 
+* Symmetric group differences are certified as exact nulls from the model inputs, including level
+  relabellings and sign reversals on other attributes. They report Type I error instead of power.
+* Custom paired analyses cache their truths in the returned model. Numerical truth construction can
+  take minutes; reuse `result$model` across sample sizes and inspect the reported reference precision.
+  Solver warm starts reduce computation while preserving reference draws.
+* Paired probability rows flag omitted attributes, unresolved-sign warnings identify effects and
+  distinguish floating-point roundoff, and prepared latent models have a compact console display.
 * `utility_model()` specifies preferences directly with dummy, fixed-score, match and rating terms.
   Coefficient means and SDs, match shares and rating distributions may differ by respondent group.
   Respondent preferences persist across tasks, and simulation exposes scores for the displayed levels.

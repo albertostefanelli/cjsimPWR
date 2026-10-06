@@ -5,8 +5,8 @@
 #' score. Respondent coefficients and respondent scores remain fixed across that respondent's tasks.
 #'
 #' @param attribute name of one design attribute.
-#' @param coef coefficient means: one value per non-reference level for a dummy term, otherwise one
-#'   unnamed scalar. A named list supplies separate values for each group.
+#' @param coef coefficient means on the log-odds scale: one value per non-reference level for a dummy
+#'   term, otherwise one unnamed scalar. A named list supplies separate values for each group.
 #' @param coef_sd coefficient standard deviations, with the same shape as `coef`. An unnamed scalar
 #'   may be repeated across a dummy term's coefficients. The default is zero.
 #' @param scores finite, nonconstant fixed scores for all levels, including the reference.
@@ -20,6 +20,18 @@
 #'   set of level labels and are reordered to design order. Each numeric argument may instead be a
 #'   list named by exactly the model's groups. Only unnamed scalar standard deviations are recycled.
 #'   Different terms' respondent variables and coefficient deviations are independent within group.
+#'
+#'   With a fixed coefficient, a one-unit increase in a profile's score changes its log-odds of being
+#'   chosen by `coef`, holding the other profile and scores fixed. If the profiles otherwise have equal
+#'   utility, a one-unit score advantage gives choice probability `plogis(coef)`: for example,
+#'   `plogis(0.4)` is about 0.60. This conditional choice probability is not an AMCE, which averages
+#'   changes over the other randomized attributes, opposing profiles and respondents. With coefficient
+#'   heterogeneity, apply this interpretation to an individual's coefficient; `plogis(coef)` alone
+#'   does not give the population choice probability.
+#'
+#'   For party levels `c("A", "B", "C")`, `share = c(.4, .3, .2)` means 40 percent of respondents
+#'   match A, 30 percent match B, 20 percent match C and 10 percent match none. Matching increases
+#'   utility when its coefficient is positive.
 #'
 #' @return A utility term specification for [utility_model()].
 #' @seealso [utility_model()], [estimate_paired()]
@@ -61,6 +73,11 @@ term_rating <- function(attribute, mean, sd, coef, coef_sd = 0) {
 #' Specify coefficients directly on the logit utility scale and compute population truths for paired
 #' logistic regression, with optional AMCE truths. Profiles are independently and uniformly randomized.
 #'
+#' When coefficients vary across respondents or a different paired analysis requires numerical
+#' integration, computing population targets can take several minutes at the default budget.
+#' Prepare the model once and reuse it across sample sizes and power analyses. A smaller
+#' `control$paired_cells` gives a faster exploratory calculation with less precise population targets.
+#'
 #' @param design a `cj_design` from [conjoint_design()].
 #' @param terms nonempty list of terms from [term_dummy()], [term_score()], [term_match()] or
 #'   [term_rating()]. Every attribute needs at least one term and at most one dummy term. Unnamed
@@ -70,11 +87,11 @@ term_rating <- function(attribute, mean, sd, coef, coef_sd = 0) {
 #' @param groups `NULL`, or unique respondent-group names. Named numeric-argument lists must match
 #'   these groups exactly; ordinary vectors are shared across groups.
 #' @param amce whether to compute and cache AMCE means and respondent-level standard deviations.
+#'   Use `amce = TRUE` if you will request AMCE estimation or paired probability output in [power_sim()].
 #' @param control named integration controls: `seed`, `exact_max_pairs`, `exact_max_rows`,
 #'   `verification_pairs`, `verification_draws`, `verification_batches`, `paired_cells` and
 #'   `exact_max_cells`. Budgets are fixed; inspect `diagnostics` and reference half-widths for precision.
-#'   The default `paired_cells` is 2,097,152 per group per batch. Numerical truth construction can
-#'   take several minutes; reuse the prepared model across power analyses.
+#'   The default `paired_cells` is 2,097,152 per group per batch.
 #'
 #' @details The default paired analysis contains every utility term and must be identified in every
 #'   group. Fixed coefficients with exactly matching analysis coding have paired targets equal to their
@@ -82,6 +99,16 @@ term_rating <- function(attribute, mean, sd, coef, coef_sd = 0) {
 #'   projection. AMCE truths are on the probability scale. A certified zero mean does not imply zero
 #'   respondent-level variation. Truth calculations preserve the caller's random-number state and use
 #'   reference streams separate from simulated experiments.
+#'
+#'   `coef` describes how preferences generate choices; it is not a probability difference. In the truth
+#'   table, `input` retains the specified coefficient mean when the analysis coding matches it, while
+#'   `true_value` is the population target used for bias and coverage. These can differ when coefficients
+#'   vary across respondents. See [term_dummy()] for a conditional probability interpretation.
+#'
+#'   [power_sim()] computes missing AMCE truths when needed and returns the expanded cache in
+#'   `result$model`; it does not modify the model supplied by the caller. Use `model <- result$model`
+#'   before another power call to reuse that work. The prepared model's `truth` table always describes
+#'   its default paired analysis and any cached AMCEs.
 #'
 #' @return A prepared `cj_dgp` with `specification = "latent"`, normalized `terms`, coefficient
 #'   `parameters`, population `truth`, numerical `diagnostics` and resolved `control`. Pass it to
@@ -96,6 +123,13 @@ term_rating <- function(attribute, mean, sd, coef, coef_sd = 0) {
 #' model <- utility_model(design, list(term_score("quality", c(0, 2), 0.3),
 #'                                     term_dummy("democracy", -0.8)))
 #' model$truth
+#'
+#' # A small integration budget keeps this heterogeneous example quick.
+#' # Inspect reference_half_width before using exploratory truths for bias or coverage.
+#' mixed <- utility_model(design, list(term_score("quality", c(0, 2), 0.3, coef_sd = 0.1),
+#'                                     term_dummy("democracy", -0.8, coef_sd = 0.2)),
+#'                        control = list(paired_cells = 8192))
+#' mixed
 utility_model <- function(design, terms, groups = NULL, amce = FALSE, control = list()) {
   if (!is.logical(amce) || length(amce) != 1L || is.na(amce)) {
     stop("`amce` must be one non-missing logical value.", call. = FALSE)
@@ -111,8 +145,42 @@ utility_model <- function(design, terms, groups = NULL, amce = FALSE, control = 
   model
 }
 
+#' @export
+print.cj_dgp <- function(x, digits = 3, ...) {
+  # Prepared calibrated objects historically used print.default(), including its digits option.
+  if (!identical(x$specification, "latent")) {
+    if (missing(digits)) return(print.default(x, ...))
+    return(print.default(x, digits = digits, ...))
+  }
+  cat("Latent utility model (logit)\n")
+  attributes <- vapply(names(x$design$levels), function(attribute) {
+    paste0(attribute, " [", paste(x$design$levels[[attribute]], collapse = ", "), "]")
+  }, character(1))
+  cat("Attributes (reference level first): ", paste(attributes, collapse = "; "), "\n", sep = "")
+  cat("Groups: ", if (is.null(x$groups)) "ungrouped" else paste(x$groups, collapse = ", "), "\n", sep = "")
+  parameters <- x$parameters[c(if (!is.null(x$groups)) "group", "term", "type", "attribute", "level",
+                              "latent_mean", "latent_sd")]
+  cat("\nCoefficient means and SDs:\n")
+  print(parameters[seq_len(min(8L, nrow(parameters))), , drop = FALSE], digits = digits, row.names = FALSE)
+  if (nrow(parameters) > 8L) cat("... ", nrow(parameters) - 8L, " more rows in $parameters.\n", sep = "")
+  truth <- x$truth
+  target <- ifelse(is.na(truth$term), truth$attribute, truth$term)
+  target[!is.na(truth$level)] <- paste0(target[!is.na(truth$level)], "[", truth$level[!is.na(truth$level)], "]")
+  table <- data.frame(truth[c("estimator", "scale", "type", if (!is.null(x$groups)) "group")],
+                      target = target, truth[c("input", "true_value", "null")], stringsAsFactors = FALSE)
+  cat("\nPopulation targets:\n")
+  print(table[seq_len(min(12L, nrow(table))), , drop = FALSE], digits = digits, row.names = FALSE)
+  if (nrow(table) > 12L) cat("... ", nrow(table) - 12L, " more rows in $truth.\n", sep = "")
+  cat("See $truth for full targets and precision, $parameters for coefficients, and $diagnostics for numerical details.\n")
+  invisible(x)
+}
+
 # Constructors deliberately defer design-dependent validation to this normalization boundary.
 normalize_terms <- function(design, terms, groups) {
+  if (inherits(terms, "cj_utility_term")) {
+    stop("`terms` must be a list of utility terms; wrap a single term in list(), ",
+         "for example terms = list(term_dummy(\"democracy\", -0.8)).", call. = FALSE)
+  }
   if (!is.list(terms) || !length(terms)) {
     stop("`terms` must be a nonempty list of utility terms.", call. = FALSE)
   }
@@ -331,7 +399,10 @@ population_gram <- function(model, analysis) {
       group <- if (is.null(model$groups)) "ungrouped" else model$groups[g]
       stop("analysis not identified or numerically ill-conditioned for group '", group,
            "', columns ", paste(labels, collapse = ", "), "; scaled Gram rcond = ",
-           format(condition, digits = 6), ".", call. = FALSE)
+           format(condition, digits = 6), ". The selected predictors contain no variation or overlap ",
+           "so closely that their effects cannot be distinguished reliably. Common causes: an all-zero ",
+           "match predictor, or a fixed score or deterministic match term alongside the full dummy ",
+           "block for the same attribute. Remove a redundant analysis term or change its variation.", call. = FALSE)
     }
     attr(gram, "scale") <- scale
     attr(gram, "rcond") <- condition

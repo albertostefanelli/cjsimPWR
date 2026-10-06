@@ -495,7 +495,9 @@ paired_covariance <- function(blocks, C, eligible, n, G, k, scale, vcov, inferen
 #' @param terms Nonempty unique character vector. Attributes select their non-reference dummies;
 #'   other names select finite numeric score columns. NULL uses an attached latent model's terms,
 #'   or all design attributes.
-#' @param groups Group names in desired order, as in [estimate_amce()].
+#' @param groups Group names in desired order, as in [estimate_amce()]. If omitted, factor group
+#'   levels or the first appearance of character groups determines the order and reference group.
+#'   Use `groups = model$groups` to retain a prepared model's order after shuffling data rows.
 #' @param vcov Respondent-clustered covariance: `"CR1"` or `"CR2"`. CR2 requires clubSandwich and
 #'   is available only on the latent scale.
 #' @param inference `"normal"`, `"t"` (all respondents minus one degrees of freedom), or
@@ -512,6 +514,7 @@ paired_covariance <- function(blocks, C, eligible, n, G, k, scale, vcov, inferen
 #'   otherwise it is the stated regression projection. Probability CR1 includes both sources of
 #'   uncertainty. No intercept is added to the paired logit. Labels are never interpreted as formulas.
 #' @seealso [utility_model()], [estimate_amce()], [power_sim()]
+#' @md
 #' @export
 #' @examples
 #' design <- conjoint_design(list(quality = c("low", "high"), democracy = c("D+", "D-")))

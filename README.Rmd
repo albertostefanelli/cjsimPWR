@@ -66,6 +66,27 @@ All rates and their MCSEs are computed over
 `n_valid`, the runs with usable inference — inspect `$failures` for the rest. Zero targets report
 `Type I error`, the false-positive rate, instead of power.
 
+## Specify preferences directly
+
+When your assumptions concern how respondents value features, use `utility_model()` instead of
+starting from target AMCEs. `estimate_paired()` can then use respondent ratings or party matches in
+a model of the choice between the two profiles. This fixed-coefficient example prepares immediately:
+
+```{r latent, eval = FALSE}
+design <- conjoint_design(list(policy = c("left", "right"), democracy = c("D+", "D-")))
+model <- utility_model(design, list(
+  term_rating("policy", mean = c(4, 6), sd = 2, coef = 0.4),
+  term_dummy("democracy", coef = -0.8)))
+result <- power_sim(model = model, estimators = c("amce", "paired"),
+                    units = 500, n_tasks = 4, sim_runs = 200, seed = 1)
+result$performance
+```
+
+Use at least 1,000 runs for a final analysis. Coefficient heterogeneity can make model preparation
+take minutes; keep the prepared model and reuse `result$model` to retain added truth caches.
+The [paired-logit guide](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/paired_logit.md)
+explains how to choose inputs, compare analyses, and interpret the results.
+
 ## Heterogeneous preferences
 
 `sigma` is a single value: the standard deviation, across respondents, of each respondent's own AMCE on

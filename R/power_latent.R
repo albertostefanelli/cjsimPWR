@@ -10,6 +10,7 @@ power_latent <- function(model, units, n_tasks, estimators, paired_terms, scale,
   }
   needs_amce <- "amce" %in% estimators || identical(scale, "probability")
   if (needs_amce && !any(model$truth$estimator == "amce")) {
+    message("Computing AMCE population targets; reuse result$model to retain this cache.")
     added <- latent_truth(model, analysis = NULL, amce = TRUE)
     model$truth <- rbind(model$truth, added$truth)
     # Keep the cached paired calculation exactly as originally prepared. AMCE diagnostics
@@ -23,7 +24,14 @@ power_latent <- function(model, units, n_tasks, estimators, paired_terms, scale,
     if (identical(paired_terms, names(model$terms))) {
       latent_reference <- model$truth[model$truth$estimator == "paired" & model$truth$scale == "latent", , drop = FALSE]
     } else {
-      reference <- latent_truth(model, analysis, amce = FALSE)
+      # Length-prefixed UTF-8 names preserve order without collisions from delimiters in labels.
+      terms_utf8 <- enc2utf8(paired_terms)
+      key <- paste0(nchar(terms_utf8, type = "bytes"), ":", terms_utf8, collapse = "")
+      reference <- model$analysis_truths[[key]]
+      if (is.null(reference)) {
+        reference <- latent_truth(model, analysis, amce = FALSE)
+        model$analysis_truths[[key]] <- reference
+      }
       latent_reference <- reference$truth
       diagnostics$paired_analysis <- reference$diagnostics
     }
@@ -36,15 +44,19 @@ power_latent <- function(model, units, n_tasks, estimators, paired_terms, scale,
   }))
   rownames(truth) <- NULL
   truth <- data.frame(effect_id = seq_len(nrow(truth)), truth, row.names = NULL)
+  truth$in_analysis <- TRUE
+  if (!is.null(analysis) && identical(scale, "probability")) {
+    omitted <- setdiff(names(model$design$levels), unique(analysis$attribute))
+    if (length(omitted)) {
+      truth$in_analysis[truth$estimator == "paired" & truth$attribute %in% omitted] <- FALSE
+      message("Paired probability analysis omits: ", paste(omitted, collapse = ", "),
+        ". Its predictions do not use these attributes; their rows retain the full AMCE targets ",
+        "and are marked in_analysis = FALSE.")
+    }
+  }
   unresolved <- !truth$null & !is.na(truth$sign_resolved) & !truth$sign_resolved
   if (any(unresolved)) {
-    reference_dominates <- truth$reference_half_width[unresolved] >=
-      truth$solver_error[unresolved] + truth$roundoff_guard[unresolved]
-    advice <- character()
-    if (any(reference_dominates)) advice <- c(advice, "increase the integration budget where reference uncertainty dominates")
-    if (any(!reference_dominates)) advice <- c(advice, "inspect solver/scaling diagnostics where numerical error dominates")
-    warning("Unresolved truth sign for effect(s) ", paste(which(unresolved), collapse = ", "),
-      ": Type S/M use an uncertain sign and unstable ratio; ", paste(advice, collapse = "; "), ".", call. = FALSE)
+    warning(latent_sign_warning(truth[unresolved, , drop = FALSE]), call. = FALSE)
   }
   worker <- latent_power_worker(model, units, n_tasks, estimators, paired_terms, scale,
                                vcov, inference, alpha, truth)
@@ -86,6 +98,29 @@ power_latent <- function(model, units, n_tasks, estimators, paired_terms, scale,
   structure(list(performance = performance, truth = truth, parameters = model$parameters,
     diagnostics = diagnostics, settings = settings, failures = failures,
     runs = if (keep_runs) runs else NULL, model = model), class = "cj_power")
+}
+
+latent_sign_warning <- function(rows) {
+  details <- vapply(seq_len(nrow(rows)), function(i) {
+    row <- rows[i, ]
+    effect <- if (!is.na(row$level)) paste0(row$attribute, " / ", row$level) else row$term
+    label <- paste(c(row$estimator, row$scale, row$group[!is.na(row$group)], effect), collapse = "; ")
+    if (row$reference_half_width == 0 && row$solver_error == 0) {
+      advice <- "within floating-point roundoff of zero; a larger integration budget cannot resolve this roundoff"
+    } else if (row$reference_half_width >= row$solver_error + row$roundoff_guard) {
+      controls <- if (row$scale == "latent") "paired_cells" else "verification_draws / verification_pairs"
+      advice <- paste0("within its integration uncertainty of zero; otherwise increase the integration budget (",
+                        controls, " in utility_model(control = ...))")
+    } else if (row$scale == "probability") {
+      advice <- "within floating-point roundoff of zero; more reference simulation alone cannot resolve this roundoff"
+    } else {
+      advice <- "within its numerical uncertainty of zero; inspect solver/scaling diagnostics"
+    }
+    paste0(label, ": ", advice, ".")
+  }, character(1))
+  paste0("Unresolved truth sign:\n", paste(details, collapse = "\n"),
+    "\nIf an effect is zero by design, its reported power is a Type I error rate and its Type S/M ",
+    "are not meaningful. Uncertified rows retain their calculated values.")
 }
 
 # Collect only package helpers reachable from the sampling/estimation entry points. all.names()

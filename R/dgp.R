@@ -77,7 +77,8 @@ effect_metadata <- function(design) {
 # Independent profile dummy columns, in design order. Used only by bounded reference calculations.
 reference_dummies <- function(codes, n_levels) {
   do.call(cbind, lapply(seq_along(n_levels), function(k) {
-    vapply(2:n_levels[k], function(l) as.numeric(codes[, k] == l), numeric(nrow(codes)))
+    matrix(vapply(2:n_levels[k], function(l) as.numeric(codes[, k] == l),
+                  numeric(nrow(codes))), nrow(codes))
   }))
 }
 

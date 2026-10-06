@@ -19,30 +19,32 @@ estimate_paired(
 \item{data}{Profile rows with binary complementary outcomes, respondent and task identifiers,
 exactly one profile 1 and 2 per task, and the design's attribute columns.}
 
-\item{design}{A design returned by [conjoint_design()].}
+\item{design}{A design returned by \code{\link[=conjoint_design]{conjoint_design()}}.}
 
 \item{terms}{Nonempty unique character vector. Attributes select their non-reference dummies;
 other names select finite numeric score columns. NULL uses an attached latent model's terms,
 or all design attributes.}
 
-\item{groups}{Group names in desired order, as in [estimate_amce()].}
+\item{groups}{Group names in desired order, as in \code{\link[=estimate_amce]{estimate_amce()}}. If omitted, factor group
+levels or the first appearance of character groups determines the order and reference group.
+Use \code{groups = model$groups} to retain a prepared model's order after shuffling data rows.}
 
-\item{vcov}{Respondent-clustered covariance: `"CR1"` or `"CR2"`. CR2 requires clubSandwich and
+\item{vcov}{Respondent-clustered covariance: \code{"CR1"} or \code{"CR2"}. CR2 requires clubSandwich and
 is available only on the latent scale.}
 
-\item{inference}{`"normal"`, `"t"` (all respondents minus one degrees of freedom), or
-`"Satterthwaite"` (CR2 only). Defaults match [estimate_amce()].}
+\item{inference}{\code{"normal"}, \code{"t"} (all respondents minus one degrees of freedom), or
+\code{"Satterthwaite"} (CR2 only). Defaults match \code{\link[=estimate_amce]{estimate_amce()}}.}
 
 \item{alpha}{Two-sided significance level.}
 
-\item{scale}{`"latent"` for logit coefficients or `"probability"` for AMCE projections.}
+\item{scale}{\code{"latent"} for logit coefficients or \code{"probability"} for AMCE projections.}
 }
 \value{
 A data frame of group effects followed by group-minus-first-group differences, with
-  estimate, standard error, inference, `term`, `scale`, and the diagnostics of [estimate_amce()].
-  Covariance in output order is attached as `vcov`. Failed rows retain a `failure_reason`;
-  `nonconvergence` includes a failed numerical fit or unverified finite MLE. Solver and overlap
-  details are attached as `diagnostics`. Group failures do not invalidate unrelated groups.
+estimate, standard error, inference, \code{term}, \code{scale}, and the diagnostics of \code{\link[=estimate_amce]{estimate_amce()}}.
+Covariance in output order is attached as \code{vcov}. Failed rows retain a \code{failure_reason};
+\code{nonconvergence} includes a failed numerical fit or unverified finite MLE. Solver and overlap
+details are attached as \code{diagnostics}. Group failures do not invalidate unrelated groups.
 }
 \description{
 Fits a no-intercept logit to profile-1 minus profile-2 predictors. Positive coefficients favour
@@ -51,8 +53,8 @@ includes uncertainty from the fitted logit and the sampled profiles/respondents.
 }
 \details{
 Probability output has an AMCE interpretation under independent uniform assignment;
-  otherwise it is the stated regression projection. Probability CR1 includes both sources of
-  uncertainty. No intercept is added to the paired logit. Labels are never interpreted as formulas.
+otherwise it is the stated regression projection. Probability CR1 includes both sources of
+uncertainty. No intercept is added to the paired logit. Labels are never interpreted as formulas.
 }
 \examples{
 design <- conjoint_design(list(quality = c("low", "high"), democracy = c("D+", "D-")))
@@ -64,5 +66,5 @@ estimate_paired(data, design)
 estimate_paired(data, design, scale = "probability")
 }
 \seealso{
-[utility_model()], [estimate_amce()], [power_sim()]
+\code{\link[=utility_model]{utility_model()}}, \code{\link[=estimate_amce]{estimate_amce()}}, \code{\link[=power_sim]{power_sim()}}
 }

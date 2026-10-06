@@ -205,8 +205,10 @@ print.cj_performance <- function(x, digits = 3, ...) {
               coverage = "Coverage")
   out <- data.frame(row.names = seq_len(nrow(x)))
   for (col in intersect(c("estimator", "scale", "type", "group", "term", "attribute", "level", "true_amce", "true_value"), names(x))) {
+    if ("estimator" %in% names(x) && all(is.na(x[[col]]))) next
     out[[col]] <- if (col %in% c("true_amce", "true_value")) round(x[[col]], 4) else x[[col]]
   }
+  if ("in_analysis" %in% names(x) && any(!x$in_analysis)) out$in_analysis <- x$in_analysis
   for (m in names(labels)) {
     if (m %in% names(x) && !all(is.na(x[[m]]))) {
       out[[labels[[m]]]] <- format_with_mcse(x[[m]], x[[paste0(m, "_mcse")]], digits)
@@ -222,6 +224,12 @@ print.cj_performance <- function(x, digits = 3, ...) {
     cat("Power is for non-null targets; Type I error is for null targets, not nonsignificant estimates.\n")
   }
   cat("Measures are conditional on runs with valid inference.\n")
+  if ("in_analysis" %in% names(out)) {
+    cat("in_analysis = FALSE: paired predictions omit this attribute; bias and coverage still use its full AMCE.\n")
+  }
+  if ("sign_resolved" %in% names(x) && any(!x$sign_resolved, na.rm = TRUE)) {
+    cat("Some target signs are unresolved; their Type S/M may be unstable. Inspect $truth$sign_resolved.\n")
+  }
   invisible(x)
 }
 

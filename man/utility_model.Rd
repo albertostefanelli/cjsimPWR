@@ -18,13 +18,13 @@ differ from all attribute names and reserved simulation columns.}
 \item{groups}{\code{NULL}, or unique respondent-group names. Named numeric-argument lists must match
 these groups exactly; ordinary vectors are shared across groups.}
 
-\item{amce}{whether to compute and cache AMCE means and respondent-level standard deviations.}
+\item{amce}{whether to compute and cache AMCE means and respondent-level standard deviations.
+Use \code{amce = TRUE} if you will request AMCE estimation or paired probability output in \code{\link[=power_sim]{power_sim()}}.}
 
 \item{control}{named integration controls: \code{seed}, \code{exact_max_pairs}, \code{exact_max_rows},
 \code{verification_pairs}, \code{verification_draws}, \code{verification_batches}, \code{paired_cells} and
 \code{exact_max_cells}. Budgets are fixed; inspect \code{diagnostics} and reference half-widths for precision.
-The default \code{paired_cells} is 2,097,152 per group per batch. Numerical truth construction can
-take several minutes; reuse the prepared model across power analyses.}
+The default \code{paired_cells} is 2,097,152 per group per batch.}
 }
 \value{
 A prepared \code{cj_dgp} with \code{specification = "latent"}, normalized \code{terms}, coefficient
@@ -37,18 +37,40 @@ Specify coefficients directly on the logit utility scale and compute population 
 logistic regression, with optional AMCE truths. Profiles are independently and uniformly randomized.
 }
 \details{
+When coefficients vary across respondents or a different paired analysis requires numerical
+integration, computing population targets can take several minutes at the default budget.
+Prepare the model once and reuse it across sample sizes and power analyses. A smaller
+\code{control$paired_cells} gives a faster exploratory calculation with less precise population targets.
+
 The default paired analysis contains every utility term and must be identified in every
 group. Fixed coefficients with exactly matching analysis coding have paired targets equal to their
 input means. Under heterogeneity or a changed analysis, the paired target is a population logistic
 projection. AMCE truths are on the probability scale. A certified zero mean does not imply zero
 respondent-level variation. Truth calculations preserve the caller's random-number state and use
 reference streams separate from simulated experiments.
+
+\code{coef} describes how preferences generate choices; it is not a probability difference. In the truth
+table, \code{input} retains the specified coefficient mean when the analysis coding matches it, while
+\code{true_value} is the population target used for bias and coverage. These can differ when coefficients
+vary across respondents. See \code{\link[=term_dummy]{term_dummy()}} for a conditional probability interpretation.
+
+\code{\link[=power_sim]{power_sim()}} computes missing AMCE truths when needed and returns the expanded cache in
+\code{result$model}; it does not modify the model supplied by the caller. Use \code{model <- result$model}
+before another power call to reuse that work. The prepared model's \code{truth} table always describes
+its default paired analysis and any cached AMCEs.
 }
 \examples{
 design <- conjoint_design(list(quality = c("low", "high"), democracy = c("D+", "D-")))
 model <- utility_model(design, list(term_score("quality", c(0, 2), 0.3),
                                     term_dummy("democracy", -0.8)))
 model$truth
+
+# A small integration budget keeps this heterogeneous example quick.
+# Inspect reference_half_width before using exploratory truths for bias or coverage.
+mixed <- utility_model(design, list(term_score("quality", c(0, 2), 0.3, coef_sd = 0.1),
+                                    term_dummy("democracy", -0.8, coef_sd = 0.2)),
+                       control = list(paired_cells = 8192))
+mixed
 }
 \seealso{
 \code{\link[=estimate_paired]{estimate_paired()}}, \code{\link[=simulate_experiment]{simulate_experiment()}}, \code{\link[=power_sim]{power_sim()}},

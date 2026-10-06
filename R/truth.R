@@ -4,10 +4,14 @@ truth_controls <- function(control = list()) {
   keep <- c("seed", "exact_max_pairs", "exact_max_rows", "verification_pairs",
             "verification_draws", "verification_batches")
   defaults <- c(dgp_controls()[keep], list(paired_cells = 2097152L, exact_max_cells = 5000000L))
-  if (!is.list(control) || (length(control) && (is.null(names(control)) ||
-      anyNA(names(control)) || anyDuplicated(names(control)) || any(!names(control) %in% names(defaults))))) {
-    stop("unknown or unnamed truth control.", call. = FALSE)
-  }
+  if (!is.list(control)) stop("truth control must be a named list.", call. = FALSE)
+  if (length(control) && (is.null(names(control)) || anyNA(names(control)) || any(names(control) == "")))
+    stop("every truth control must have a name.", call. = FALSE)
+  if (anyDuplicated(names(control))) stop("duplicated truth control: ",
+    paste(unique(names(control)[duplicated(names(control))]), collapse = ", "), ".", call. = FALSE)
+  unknown <- setdiff(names(control), names(defaults))
+  if (length(unknown)) stop("unknown truth control: ", paste(unknown, collapse = ", "),
+    ". Valid controls: ", paste(names(defaults), collapse = ", "), ".", call. = FALSE)
   defaults[names(control)] <- control
   for (nm in names(defaults)) {
     x <- defaults[[nm]]
@@ -154,6 +158,16 @@ latent_walk_cells <- function(model, analysis, g, streams, support, callback, bl
   invisible(NULL)
 }
 
+latent_paired_start <- function(model, analysis, g, scales) {
+  index <- analysis$coefficient_index
+  zero <- list(gamma = rep(0, nrow(analysis)), method = "zero")
+  if (length(index) != length(scales) || anyNA(index) || any(index < 1L) ||
+      any(index > ncol(model$coef_mean))) return(zero)
+  gamma <- as.numeric(model$coef_mean[g, index]) * scales
+  if (any(!is.finite(gamma))) return(zero)
+  list(gamma = gamma, method = "mapped coefficient means")
+}
+
 latent_paired_reference <- function(model, analysis, g, streams, support, gram) {
   J <- nrow(analysis); B <- if (is.null(support)) length(streams) else 1L
   # QR acts on design rows, never its Gram matrix. Population RMS preconditions
@@ -214,8 +228,18 @@ latent_paired_reference <- function(model, analysis, g, streams, support, gram) 
     if (by_batch) out$batch_scores <- scores
     out
   }
-  fit <- solve_paired_logit(evaluate, rep(0, J), paired_numerics())
+  start <- latent_paired_start(model, analysis, g, scales)
+  fit <- solve_paired_logit(evaluate, start$gamma, paired_numerics())
+  warm_failure <- NULL
+  if (start$method != "zero" && fit$status != "converged") {
+    # A finite generating mean can still give unusable information in a misspecified
+    # or highly heterogeneous analysis. Reusing it never replaces the usual safe start.
+    warm_failure <- list(status = fit$status, diagnostics = fit$diagnostics)
+    fit <- solve_paired_logit(evaluate, rep(0, J), paired_numerics())
+  }
   diagnostic <- c(fit$diagnostics, list(status = fit$status, scales = scales, rank = rank,
+    start = if (is.null(warm_failure)) start$method else "zero fallback",
+    attempted_start = start$method, warm_start_failure = warm_failure,
     method = if (is.null(support)) "independent paired cells" else "exact finite support",
     rms_method = if (robust_rms) "max-factored replay" else "population-scaled RMS",
     batches = if (is.null(support)) B else 0L,
@@ -372,6 +396,68 @@ latent_amce_null <- function(model, g, attribute, level) {
   }, logical(1)))
 }
 
+# One joint level permutation must match every term on an attribute. Independent
+# term-by-term permutations would not preserve their joint utility/score vector.
+latent_attribute_signature <- function(model, g, attribute, sign = 1) {
+  L <- length(model$design$levels[[attribute]])
+  rows <- matrix(numeric(), L, 0L); free <- numeric()
+  for (term in model$terms) {
+    if (term$attribute != attribute) next
+    if (term$type == "dummy") {
+      rows <- cbind(rows, sign * c(0, term$coef[g, ]), c(0, term$coef_sd[g, ]))
+    } else {
+      free <- c(free, sign * term$coef[g, 1L], term$coef_sd[g, 1L])
+      rows <- cbind(rows, switch(term$type,
+        score = term$scores[g, ], rating = cbind(term$mean[g, ], term$sd[g, ]),
+        match = term$probabilities[g, seq_len(L)]))
+      if (term$type == "match") free <- c(free, term$probabilities[g, L + 1L])
+    }
+  }
+  list(rows = unname(rows), free = unname(free))
+}
+
+latent_attribute_equivalent <- function(model, g, attribute, signs = c(1, -1), fixed = integer()) {
+  a <- latent_attribute_signature(model, g, attribute)
+  fixed <- unique(fixed)
+  if (anyNA(fixed) || any(!fixed %in% seq_len(nrow(a$rows)))) return(FALSE)
+  rest <- setdiff(seq_len(nrow(a$rows)), fixed)
+  sorted <- function(rows) {
+    rows <- rows[rest, , drop = FALSE]
+    if (!ncol(rows)) return(rows)
+    rows[do.call(order, lapply(seq_len(ncol(rows)), function(j) rows[, j])), , drop = FALSE]
+  }
+  any(vapply(signs, function(sign) {
+    b <- latent_attribute_signature(model, 1L, attribute, sign)
+    identical(a$free, b$free) &&
+      identical(a$rows[fixed, , drop = FALSE], b$rows[fixed, , drop = FALSE]) &&
+      identical(sorted(a$rows), sorted(b$rows))
+  }, logical(1)))
+}
+
+# Relabelling preserves uniform profiles. On another attribute, negating every
+# utility contribution is undone by swapping its two profiles. The analysis
+# transforms invertibly within that attribute, leaving the target coefficient
+# unchanged. Included dummy blocks must be complete for that argument.
+latent_symmetric_difference <- function(model, analysis, g, attribute, level, probability) {
+  if (is.na(attribute) || !attribute %in% names(model$design$levels)) return(FALSE)
+  if (!probability) {
+    if (is.null(analysis)) return(FALSE)
+    for (k in unique(analysis$attribute[analysis$type == "dummy"])) {
+      cols <- analysis[analysis$type == "dummy" & analysis$attribute == k, , drop = FALSE]
+      lv <- model$design$levels[[k]]
+      if (nrow(cols) != length(lv) - 1L || !setequal(cols$level, lv[-1L]) ||
+          any(cols$reference_level != lv[1L])) {
+        stop("paired symmetry certification requires complete dummy blocks.", call. = FALSE)
+      }
+    }
+  }
+  lv <- model$design$levels[[attribute]]
+  fixed <- if (probability || !is.na(level)) c(1L, match(level, lv)) else integer()
+  latent_attribute_equivalent(model, g, attribute, signs = 1, fixed = fixed) &&
+    all(vapply(setdiff(names(model$design$levels), attribute), function(k)
+      latent_attribute_equivalent(model, g, k), logical(1)))
+}
+
 certify_nulls <- function(model, analysis, truth) {
   answer <- logical(nrow(truth))
   for (i in seq_len(nrow(truth))) {
@@ -388,9 +474,11 @@ certify_nulls <- function(model, analysis, truth) {
         j <- which(analysis$term == row$term & (is.na(analysis$level) & is.na(row$level) |
           !is.na(analysis$level) & !is.na(row$level) & analysis$level == row$level))
         index <- analysis$coefficient_index[j]
-        equal_analytic <- model$coef_mean[g, index] == model$coef_mean[1L, index]
+        equal_analytic <- length(index) == 1L && model$coef_mean[g, index] == model$coef_mean[1L, index]
       }
-      answer[i] <- shared || all(zeros) || equal_analytic
+      answer[i] <- shared || all(zeros) || equal_analytic ||
+        latent_symmetric_difference(model, analysis, g, row$attribute, row$level,
+          probability = row$scale == "probability")
       next
     }
     if (row$scale == "probability") {
@@ -452,6 +540,7 @@ latent_truth <- function(model, analysis = NULL, amce = FALSE) {
   streams <- latent_reference_streams(model$control$seed, G, B)
   with_reference_seed(model$control$seed, {
     tables <- vector("list", G); diagnostics <- vector("list", G)
+    announced <- FALSE
     for (g in seq_len(G)) {
       if (shared[g] < g) {
         tables[[g]] <- tables[[shared[g]]]
@@ -462,6 +551,13 @@ latent_truth <- function(model, analysis = NULL, amce = FALSE) {
       }
       paired_analytic <- !is.null(analysis) && latent_matching_analysis(model, analysis, g)
       support <- if (amce || !paired_analytic) latent_finite_support(model, g, model$control) else NULL
+      if (!announced && !is.null(analysis) && !paired_analytic && is.null(support) &&
+          B * model$control$paired_cells >= 1e6) {
+        message("Computing paired population targets (", B, " batches of ",
+          format(model$control$paired_cells, big.mark = ",", scientific = FALSE),
+          " cells per numerical group); this can take several minutes. Reuse the prepared model.")
+        announced <- TRUE
+      }
       rows <- list(); diagnostic <- list(streams = streams[[g]], shared_with = g)
       if (!is.null(analysis)) {
         value <- if (paired_analytic) {
@@ -499,7 +595,7 @@ latent_truth <- function(model, analysis = NULL, amce = FALSE) {
       a$solver_error <- a$solver_error + b$solver_error
       a$roundoff_guard <- a$roundoff_guard + b$roundoff_guard
       a$analytic <- a$analytic & b$analytic
-      a$null <- shared[g] == shared[1L] | (a$null & b$null) | (a$analytic & a$true_value == 0)
+      a$null <- certify_nulls(model, analysis, a)
       a$true_value[a$null] <- a$reference_mcse[a$null] <- a$reference_half_width[a$null] <- 0
       a$amce_sd <- a$sd_mcse <- a$sd_half_width <- NA_real_
       a$sign_resolved <- ifelse(a$null, NA, a$analytic | abs(a$true_value) >

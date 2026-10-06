@@ -118,6 +118,7 @@ adopted. Omit all model-building arguments and deprecated aliases when supplying
 models and paired logit for models from \code{\link[=utility_model]{utility_model()}}. Paired power requires a latent model.}
 
 \item{paired_terms}{Attributes or generated score columns to include in the paired analysis.
+Custom latent truths are cached by ordered analysis in the returned \code{model$analysis_truths}.
 Defaults to all utility terms. Available only when the paired estimator is selected.}
 
 \item{scale}{Paired reporting scale: \code{"latent"} or \code{"probability"}. Paired-only power defaults to
@@ -138,7 +139,11 @@ own truth table.
 \item \code{settings}: resolved design, sample sizes, DGP, inference, seeds, worker count and controls.
 \item \code{failures}: counts by effect, failure reason and error message; empty when no inference fails.
 \item \code{runs}: per-run estimates with \code{run} and \code{effect_id}, or NULL when \code{keep_runs = FALSE}.
-\item \code{model}: the prepared DGP, reusable with \code{\link[=simulate_experiment]{simulate_experiment()}}.
+\item \code{model}: the prepared DGP, reusable with \code{\link[=simulate_experiment]{simulate_experiment()}} and \code{\link[=power_sim]{power_sim()}}. Assign
+\code{model <- result$model} to retain newly computed AMCE and custom-analysis truth caches;
+\code{model$truth} always describes the default analysis. Latent \code{truth} and \code{performance} use
+\code{true_value} and include \code{in_analysis}: paired probability rows for omitted attributes are
+marked \code{FALSE}, while their targets remain the full population AMCEs.
 }
 }
 \description{
