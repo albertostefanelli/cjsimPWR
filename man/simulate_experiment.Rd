@@ -52,7 +52,8 @@ coefficient scale. The implied AMCE SDs are reported in the model's \code{truth}
 \item{model}{optional prepared \code{cj_dgp} object, from a previous simulation's \code{dgp} attribute or
 \code{\link[=power_sim]{power_sim()}}'s \code{model}, for repeated experiments without recalibration.
 Supply the same design and omit true_amce, sigma, dgp, latent_sigma and calibration_control;
-\code{units} and \code{n_tasks} may differ from the original call.}
+\code{units} and \code{n_tasks} may differ from the original call.
+A latent model from \code{\link[=utility_model]{utility_model()}} additionally supplies one score column per non-dummy term.}
 
 \item{calibration_control}{optional named list of calibration settings; see the Calibration section
 of \code{\link[=simulate_experiment]{simulate_experiment()}}. \code{reference_margin = 0.5} enables experimental precision planning;
@@ -76,6 +77,10 @@ described above.
 
 Calibration and reference calculations preserve the caller's RNG exactly; only sampling the
 experiment itself (the returned profile rows) advances it.
+With a latent model, \code{dgp} contains its utility terms, coefficient parameters and population truths.
+Score columns reveal only the scores of levels shown in each profile; unseen ratings and matches
+cannot be reconstructed from them. Respondent variables persist across tasks. No separate
+respondent-table attribute is attached.
 }
 \description{
 Draws the tasks of a paired conjoint experiment and simulates each respondent's choices.

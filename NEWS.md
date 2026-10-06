@@ -1,3 +1,21 @@
+# cjsimPWR 0.3.1
+
+* `utility_model()` specifies preferences directly with dummy, fixed-score, match and rating terms.
+  Coefficient means and SDs, match shares and rating distributions may differ by respondent group.
+  Respondent preferences persist across tasks, and simulation exposes scores for the displayed levels.
+* `estimate_paired()` fits a no-intercept logit of paired predictor differences with respondent-clustered
+  CR1 or CR2 inference. CR1 also reports fitted AMCE projections with uncertainty from both the logit
+  fit and sampled profiles. Group failures retain unrelated groups and contrasts.
+* `power_sim(model = ...)` reuses calibrated or latent prepared models. Latent models support paired
+  estimation, ordinary AMCE estimation, or both on the same experiments. Probability output compares
+  both estimators against the true population AMCE; latent output uses the selected analysis's
+  population logit target, retaining input coefficients separately.
+* Latent truths use fixed integration budgets, separate reference substreams, certified nulls and
+  explicit Monte Carlo precision. Type S/M remain available when a target sign is unresolved, with
+  a diagnostic warning. Failed numerical fits remain failures, never nonsignificant results.
+* Existing calibrated calls, returned objects and experiment streams are preserved. No new package
+  dependency is required. See `docs/paired_logit.md` for assumptions, scales and examples.
+
 # cjsimPWR 0.3.0
 
 This release substantially rewrites the simulation, estimation and reporting code. Results can differ

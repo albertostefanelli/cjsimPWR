@@ -8,19 +8,22 @@
 \description{
 \if{html}{\figure{logo.png}{options: style='float: right' alt='logo' width='120'}}
 
-Simulation-based power analysis for paired, forced-choice conjoint experiments that estimate average marginal component effects (AMCEs) as defined by Hainmueller, Hopkins and Yamamoto (2014) \doi{10.1093/pan/mpt024}. Choices are simulated from a logit model calibrated so that the population AMCEs match requested effects within a calibration tolerance, optionally with respondent heterogeneity and respondent subgroups; AMCEs and differences between subgroups are estimated by least squares with respondent-clustered standard errors. Power and coverage are reported for every effect; Type I error is reported for null targets, and Type S and Type M errors of Gelman and Carlin (2014) \doi{10.1177/1745691614551642} for non-null targets where they are defined; every reported rate carries a Monte Carlo standard error. Extends the simulation framework of Stefanelli and Lukac (2020) \doi{10.31235/osf.io/spkcy}.
+Simulation-based power analysis for paired, forced-choice conjoint experiments that estimate average marginal component effects (AMCEs) as defined by Hainmueller, Hopkins and Yamamoto (2014) \doi{10.1093/pan/mpt024}. Choices are simulated from a logit model calibrated so that the population AMCEs match requested effects within a calibration tolerance, optionally with respondent heterogeneity and respondent subgroups; AMCEs and differences between subgroups are estimated by least squares with respondent-clustered standard errors. Alternatively, utility coefficients, respondent ratings and matches specify preferences directly, with paired-logit inference on the latent or AMCE probability scale. Power and coverage are reported for every effect; Type I error is reported for null targets, and Type S and Type M errors of Gelman and Carlin (2014) \doi{10.1177/1745691614551642} for non-null targets where they are defined; every reported rate carries a Monte Carlo standard error. Extends the simulation framework of Stefanelli and Lukac (2020) \doi{10.31235/osf.io/spkcy}.
 }
 \details{
 \code{\link[=power_sim]{power_sim()}} runs the whole analysis described above. For individual steps, use
 \code{\link[=conjoint_design]{conjoint_design()}} to describe the attributes, \code{\link[=simulate_experiment]{simulate_experiment()}} to draw one experiment,
 \code{\link[=estimate_amce]{estimate_amce()}} to analyse it, and \code{\link[=summarise_runs]{summarise_runs()}} to summarise estimates from repeated
 experiments.
+Use \code{\link[=utility_model]{utility_model()}} with \code{\link[=term_dummy]{term_dummy()}}, \code{\link[=term_score]{term_score()}}, \code{\link[=term_match]{term_match()}} or \code{\link[=term_rating]{term_rating()}}
+to specify latent preferences directly, and \code{\link[=estimate_paired]{estimate_paired()}} for paired-logit inference.
 
 Full explanations live in the package guides, online:
 \href{https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/simulation_model.md}{simulation model},
 \href{https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/clustering.md}{clustering and inference},
 \href{https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/error_rates.md}{power, Type I, Type S and Type M errors},
 \href{https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/calibration.md}{calibration and reference precision},
+\href{https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/paired_logit.md}{latent coefficients and paired logit},
 \href{https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/closed_form.md}{comparison to closed-form power formulas} and
 \href{https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/declaredesign.md}{comparison to DeclareDesign}.
 Run \code{news(package = "cjsimPWR")} for release notes and \code{citation("cjsimPWR")} for citations.

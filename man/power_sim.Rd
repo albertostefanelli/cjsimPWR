@@ -25,7 +25,11 @@ power_sim(
   group_name = NULL,
   true_coef = NULL,
   sigma.u_k = NULL,
-  n_attributes = NULL
+  n_attributes = NULL,
+  model = NULL,
+  estimators = NULL,
+  paired_terms = NULL,
+  scale = NULL
 )
 }
 \arguments{
@@ -106,6 +110,19 @@ independently now (see NEWS); this alias does not reproduce a 0.2.1 experiment's
 
 \item{n_attributes}{Deprecated attribute count, checked against \code{levels} when supplied. See NEWS
 for the full migration table covering every deprecated argument.}
+
+\item{model}{Optional prepared calibrated or latent \code{cj_dgp}. Its design and omitted groups are
+adopted. Omit all model-building arguments and deprecated aliases when supplying a model.}
+
+\item{estimators}{Unique nonempty subset of \code{c("amce", "paired")}. Defaults to AMCE for calibrated
+models and paired logit for models from \code{\link[=utility_model]{utility_model()}}. Paired power requires a latent model.}
+
+\item{paired_terms}{Attributes or generated score columns to include in the paired analysis.
+Defaults to all utility terms. Available only when the paired estimator is selected.}
+
+\item{scale}{Paired reporting scale: \code{"latent"} or \code{"probability"}. Paired-only power defaults to
+latent coefficients. Selecting both estimators requires probability scale and chooses it with
+a message when omitted. Paired probability reporting supports CR1 only.}
 }
 \value{
 A \code{cj_power} list with:
@@ -134,6 +151,19 @@ across worker counts and the first runs remain unchanged when \code{sim_runs} in
 has its own seed argument in \code{calibration_control}. Equal seed values can overlap calibration and
 experiment draws; the final reference uses a fresh substream. The caller's random-number state,
 including its normal-generator kind, is restored after the call.
+Latent truth calculations allocate separate reference substreams, including when their seed equals
+the experiment seed. Changing estimators, analysis terms or truth caches leaves experiments unchanged.
+}
+
+\section{Latent utility models}{
+ \code{\link[=utility_model]{utility_model()}} prepares a model from logit coefficients and
+respondent score distributions. Paired latent bias and coverage use the population target of the
+selected analysis; under misspecification this can differ from the input coefficients. Probability
+output uses the true population AMCE for both estimators. Truth rows add \code{estimator}, \code{scale},
+\code{term}, \code{true_value}, certified \code{null} and \code{sign_resolved}; \code{input} retains a matching utility
+coefficient separately. A sign warning leaves Type S/M available and identifies whether increasing
+integration precision or inspecting numerical diagnostics is appropriate. See the
+\href{https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/paired_logit.md}{paired logit guide}.
 }
 
 \section{Interpreting results}{
