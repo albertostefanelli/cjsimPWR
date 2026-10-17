@@ -6,40 +6,25 @@ Among significant estimates of nonzero effects, it also reports Type S and Type 
 the sign is wrong and how much the size is exaggerated. This guide explains how to read these results
 and check them for a planned design.
 
-**In brief**
-
-- Include a zero AMCE in the design to see the Type I error of the planned analysis next to power. At
-  `alpha = 0.05` it should be close to 5%, allowing for its Monte Carlo standard error.
-- Zero targets report Type I error; nonzero targets report power. A nonsignificant estimate never
-  turns power into Type I error.
-- Before comparing designs or inference methods, inspect each rate's Monte Carlo standard error and the
-  failed-run counts in `$failures`, and compare power against null rejection rates — following
-  [Morris, White and Crowther (2019)](https://doi.org/10.1002/sim.8086).
-
-Jump to: [reading the output](#reading-the-output), [checking an effect](#checking-an-effect),
-[Type S and Type M errors](#type-s-and-type-m-errors), [a subgroup example](#a-subgroup-example),
-[Monte Carlo precision and failed runs](#monte-carlo-precision-and-failed-runs),
-[interpreting reference sensitivity](#interpreting-reference-sensitivity), or
-[the closed-form comparison](#comparison-with-schuessler-and-freitag-2020).
-
 ## Reading the output
 
-`power_sim()` classifies a row as a null target when `requested_amce == 0` — using the requested **contrast** for a difference row. Null targets populate `type_1_error`; non-null targets populate `power`. The default printout includes Type I error with its MCSE when available and
-omits entirely unavailable measure columns.
+Each row of `$performance` is one effect. With requested AMCEs (`true_amce`), each row is an AMCE or
+group difference, and `power_sim()` treats a row as a null target when its requested effect is zero (for
+a difference row, when the two groups' requests are equal). With a model from `utility_model()`, rows can
+also be paired-logit coefficients, and a row is a null target only when the package proves that its true
+value is zero (`null = TRUE`); see the [paired-logit guide](paired_logit.md). Null targets report
+`type_1_error`; all other rows report `power`, `type_s` and `type_m`. Each rate comes with its Monte Carlo
+standard error (`_mcse`), and the printout omits columns that are empty for every row.
 
-An individual zero AMCE is exact, as are zero differences for shared populations and levels that are
-zero in both groups. Equal nonzero requests in otherwise different populations can leave a small
-residual contrast after separate calibration, so their reported Type I error is approximate. Bias and
-coverage still use the generated-effect reference `true_amce`.
+## Type I error
 
-`true_amce` is the package's numerical reference for the AMCE actually generated in the simulated
-population, not necessarily identical to the requested value. Bias and coverage are measured against it,
-and its own uncertainty (`reference_mcse`, `reference_half_width`) is carried into `bias_mcse` and the
-coverage-sensitivity bounds described below. See the
-[calibration guide](calibration.md#1-targets-and-numerical-truth) for the full requested/generated/reference
-distinction.
+A null target's Type I error is exact when the generated effect is exactly zero, and approximate when
+calibration leaves a small residual, as it can for a difference between separately calibrated groups;
+see the [calibration guide](calibration.md#1-targets-and-numerical-truth) for when each case applies.
+Bias and coverage are always measured against the package's measurement of the generated effect, not
+against the request: `true_amce` with requested AMCEs, and `true_value` for models from `utility_model()`.
 
-## Checking an effect
+### Checking an effect
 
 To check a particular effect, run the simulation twice: once with its expected effect to measure power,
 and once with its target set to zero to measure Type I error, keeping every other setting — other
@@ -73,6 +58,34 @@ A single run with every target set to zero is a quick first screen: it reports a
 once. But the rate depends on how many respondents inform each estimate, so an all-zero scenario does not
 establish Type I error for every configuration of the other effects.
 
+### A subgroup example
+
+In this example the second attribute has the same AMCE, 0.05, in two separately calibrated groups, so
+the null difference between them is approximate:
+
+```r
+groups <- power_sim(
+  levels = c(2, 2), groups = c("A", "B"),
+  true_amce = list(A = list(0.10, 0.05), B = list(0.02, 0.05)),
+  units = c(A = 250, B = 250), n_tasks = 3, sigma = 0.05,
+  sim_runs = 1000, seed = 43
+)
+null_difference <- subset(groups$performance,
+                          type == "difference" & attribute == "var_2")
+null_difference[, c("true_amce", "target_error_bound", "type_1_error", "type_1_error_mcse")]
+```
+
+Inspect the residual contrast and its bound alongside the reported rate. A tighter tolerance, such as
+`calibration_control = list(tolerance = 0.0005)`,
+demands more precision and can take longer or fail if that precision cannot be established. Increasing
+only `sim_runs` improves experiment-rate precision — it does not reduce the reference error for a fixed
+prepared model; the [calibration guide](calibration.md#4-choosing-precision) covers tightening that
+precision.
+
+For summarising your own experiment estimates outside `power_sim()`, see the approximate-null example in
+the [`summarise_runs()`] help. Standalone calls construct no target error bound, so you
+must supply and interpret any reference details yourself.
+
 ## Type S and Type M errors
 
 Power says how often an effect is detected, not whether the detected estimates are accurate.
@@ -98,31 +111,6 @@ an extreme ratio.
 
 [^typesm]: These values come from the normal approximation of Lu, Qiu and Deng (2019), which the
     package also reports as `analytic_type_s` and `analytic_type_m` in `$performance`.
-
-## A subgroup example
-
-```r
-groups <- power_sim(
-  levels = c(2, 2), groups = c("A", "B"),
-  true_amce = list(A = list(0.10, 0.05), B = list(0.02, 0.05)),
-  units = c(A = 250, B = 250), n_tasks = 3, sigma = 0.05,
-  sim_runs = 1000, seed = 43
-)
-null_difference <- subset(groups$performance,
-                          type == "difference" & attribute == "var_2")
-null_difference[, c("true_amce", "target_error_bound", "type_1_error", "type_1_error_mcse")]
-```
-
-Inspect the residual contrast and its bound alongside the reported rate. A tighter tolerance, such as
-`calibration_control = list(tolerance = 0.0005)`,
-demands more precision and can take longer or fail if that precision cannot be established. Increasing
-only `sim_runs` improves experiment-rate precision — it does not reduce the reference error for a fixed
-prepared model; the [calibration guide](calibration.md#4-choosing-precision) covers tightening that
-precision.
-
-For summarising your own experiment estimates outside `power_sim()`, see the approximate-null example in
-the [`summarise_runs()`] help. Standalone calls construct no target error bound, so you
-must supply and interpret any reference details yourself.
 
 ## Monte Carlo precision and failed runs
 
@@ -163,8 +151,8 @@ warning threshold. The check returns no diagnostic column and is unavailable whe
 or empirical SE is non-finite, or the empirical SE is non-positive. An unavailable check does not
 establish that calibration error is negligible.
 
-`coverage` is the share of experiment confidence intervals containing `true_amce`; its MCSE remains
-conditional on that numerical reference. `coverage_reference_lower` and `coverage_reference_upper` are
+`coverage` is the share of experiment confidence intervals containing `true_amce` (`true_value` for
+models from `utility_model()`); its MCSE remains conditional on that numerical reference. `coverage_reference_lower` and `coverage_reference_upper` are
 conservative *bounds* on coverage over the reference interval — not confidence intervals for coverage —
 and coincide with `coverage` when the reference half-width is zero (see `summarise_runs()` help for their
 definitions). For an exact zero, coverage equals `1 - type_1_error`; that identity need not hold for an

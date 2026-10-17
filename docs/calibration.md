@@ -59,7 +59,14 @@ request. Suppose Democratic and Republican respondents have the same 5-point eff
 but different effects of candidate party, so the two groups are calibrated separately. Their generated
 gender effects can come out slightly apart, and the measured difference between the groups might be
 0.00006 instead of zero. Keep that residual, and its `reference_mcse`, when judging bias and coverage;
-do not replace them with zero. This follows the general advice to evaluate a simulation against the
+do not replace them with zero.
+
+Some zeros are exact. A requested zero AMCE within a group is generated as exactly zero, and so is a
+zero difference between groups that share one calibrated population, or for a level whose AMCE is zero
+in both groups. Equal nonzero requests in separately calibrated groups, as in the gender example, can
+leave a small residual difference, so the Type I error reported for that difference is approximate.
+
+Scoring against the answer key follows the general advice to evaluate a simulation against the
 effect it actually generated and to report how precisely that effect was measured
 ([Naimi, Benkeser and Rudolph, 2025](https://doi.org/10.1097/EDE.0000000000001873)). The gaps are usually
 tiny next to the standard error of an AMCE in a real study (typically 0.01 to 0.05), so they rarely

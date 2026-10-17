@@ -1,184 +1,230 @@
-# Power when you specify preferences directly: paired logit
+# Paired logit
 
-Most cjsimPWR analyses start from the effects you expect to see: the average marginal component effects
-(AMCEs), supplied through `true_amce`. Here you start from what drives choices instead. You describe how
-respondents value a profile's features, including their own policy ratings or party identity, and the
-package works out the effects that follow. This is useful when your theory and planned analysis use
-those respondent characteristics. You can compare a paired logit, which models the choice between two
-profiles directly, with standard AMCE regression on the same simulated experiments. If your assumptions
-are already expressed as AMCEs, the existing `true_amce` interface remains the more direct starting point.
+## Design
 
-## Start with shared preferences
-
-A profile's *utility* is its appeal to a respondent: add up each feature's score multiplied by the
-weight the respondent gives it. Higher utility makes the profile more likely to be chosen. This first
-model has the same weights for everyone, although respondents' ratings and parties differ. Preparing
-its paired-coefficient targets takes well under a second on the test machine.
+`conjoint_design()` names the attributes and lists their levels. The first level of each attribute is
+the reference level that the other levels are compared with.
 
 ```r
 library(cjsimPWR)
 design <- conjoint_design(list(
-  policy = c("left", "centre", "right"),
-  party = c("A", "B", "C"), democracy = c("D+", "D-")))
+  policy    = c("left", "centre", "right"),
+  party     = c("A", "B", "C"),
+  democracy = c("D+", "D-")))
+```
+
+`D+` is a candidate who respects democratic rules and `D-` one who does not.
+
+## Utility terms
+
+Each attribute gets a term that says what a profile receives for it. A profile's utility is the sum
+of what it receives from all terms, and in each task the profile with the higher utility is the more
+likely to be chosen: a little more likely when the difference is small, almost certainly when it is
+large.[^logit] `coef` is the weight of a term, what one unit of its score adds to utility. Zero means
+the attribute does not matter, and a negative value counts against the profile.
+
+[^logit]: Profile 1 is chosen with probability `plogis(U1 - U2)`, the logistic function of the
+    utility difference. This is the choice model of the
+    [simulation model guide](simulation_model.md#choice-model), and the reason the analysis is called
+    a paired logit.
+
+| Term | Score of a profile | Example |
+| --- | --- | --- |
+| `term_dummy()` | 1 for the non-reference level shown, 0 otherwise; one `coef` per non-reference level | A candidate who breaks the rules loses 0.8 |
+| `term_score()` | A fixed number assigned to each level in `scores` | Years of experience 0, 5 and 10, each year worth 0.05 |
+| `term_match()` | 1 when the level is the respondent's own, 0 otherwise; `share` gives the proportion of respondents matching each level | A candidate from the respondent's party gains 0.9 |
+| `term_rating()` | The respondent's own rating of the level, drawn from a normal distribution with `mean` and `sd` | A policy the respondent rates 7 adds 7 × 0.3 |
+
+```r
 model <- utility_model(design, terms = list(
-  term_rating("policy", mean = c(6, 5, 4), sd = c(2, 1.5, 2), coef = .3),
-  term_match("party", share = c(.4, .3, .2), coef = .9),
-  term_dummy("democracy", coef = -.8)))
-model$truth[c("term", "input", "true_value")]
+  term_rating("policy", mean = c(6, 5, 4), sd = c(2, 1.5, 2), coef = 0.3),
+  term_match("party", share = c(0.4, 0.3, 0.2), coef = 0.9),
+  term_dummy("democracy", coef = -0.8)))
+model
 ```
 
 ```text
-           term input true_value
-1 policy_rating   0.3        0.3
-2   party_match   0.9        0.9
-3     democracy  -0.8       -0.8
+Latent utility model (logit)
+Attributes (reference level first): policy [left, centre, right]; party [A, B, C]; democracy [D+, D-]
+Groups: ungrouped
+
+Coefficient means and SDs:
+          term   type attribute level latent_mean latent_sd
+ policy_rating rating    policy  <NA>         0.3         0
+   party_match  match     party  <NA>         0.9         0
+     democracy  dummy democracy    D-        -0.8         0
+
+Population targets:
+ estimator  scale        type        target input true_value  null
+    paired latent coefficient policy_rating   0.3        0.3 FALSE
+    paired latent coefficient   party_match   0.9        0.9 FALSE
+    paired latent coefficient democracy[D-]  -0.8       -0.8 FALSE
+See $truth for full targets and precision, $parameters for coefficients, and $diagnostics for numerical details.
 ```
 
-The policy term gives a profile 0.3 utility units for every rating point. The party term adds 0.9 when
-its party matches the respondent's: 40% of respondents match A, 30% B, 20% C, and 10% match none. The
-democracy term gives D− a weight of −0.8 relative to D+, the first and therefore reference level.
-A positive weight makes a profile more likely to be chosen when its score is higher.
+- `policy`: every respondent has their own rating of each position. Ratings of `left` average 6 with
+  an `sd` of 2, so about two thirds of respondents rate it between 4 and 8; `centre` averages 5 and
+  `right` 4. A profile adds 0.3 for every rating point.
+- `party`: 40 percent of respondents belong to party A, 30 percent to B and 20 percent to C; the
+  remaining 10 percent belong to none. A profile from the respondent's own party adds 0.9.
+- `democracy`: `D-` subtracts 0.8 compared with `D+`, the reference level.
 
-`input` is the coefficient you supplied. `true_value` is what the specified analysis would estimate
-with unlimited data from this population. Here they agree because everyone has the same coefficients
-and the analysis includes all the generating terms with the same coding. These are logit coefficients,
-not percentage-point effects.
+A respondent keeps the same ratings, party and coefficients in every task. Terms always go inside
+`list()`, even a single one. Every attribute needs a term; `term_dummy("x", coef = 0)` switches an
+attribute off. Values follow the design's level order, or can be named by level. A dummy term with
+several non-reference levels takes one `coef` per level: `term_dummy("policy", coef = c(-0.2, -0.5))`.
+Group-specific values are shown under [Groups](#groups).
 
-There are four ways to describe a feature:
+In the population targets, `input` is the coefficient you supplied and `true_value` is what the
+analysis would recover from this population with an unlimited number of respondents. They are equal
+here; they differ when coefficients vary across respondents (see
+[Heterogeneous coefficients](#heterogeneous-coefficients)).
 
-| Term | What the profile receives |
-| --- | --- |
-| `term_dummy()` | One coefficient for each level other than the reference |
-| `term_score()` | A fixed numeric score for each level, such as `scores = c(0, 1, 2)` |
-| `term_match()` | Score 1 for the respondent's matching level and 0 otherwise |
-| `term_rating()` | The respondent's rating of the displayed level |
+## Choosing coefficients
 
-Always put the terms inside `list()`, even for a single attribute. Values follow the design's level
-order, or can be named by level. Every attribute needs a term; give it zero coefficient means and SDs
-to make it inactive. Some combinations repeat the same information, such as a fixed score plus all
-of that attribute's dummies, and cannot be estimated separately. See `?term_dummy` and `?utility_model`
-for input validation and group-specific values.
+Coefficients have no natural unit. To judge their size, compare two profiles that are equal in every
+other respect and give one a one-unit score advantage on the term; `plogis(coef)` is the probability
+that it is chosen.
 
-## Choose plausible coefficients, ratings and variation
+| `coef` | `plogis(coef)` |
+| ---: | ---: |
+| 0 | 0.50 |
+| 0.2 | 0.55 |
+| 0.5 | 0.62 |
+| 0.8 | 0.69 |
+| 1.0 | 0.73 |
+| 1.5 | 0.82 |
+| 2.0 | 0.88 |
 
-The coefficients describe changes in log-odds. To make their size concrete, consider profiles that
-otherwise have equal utility. A D− coefficient of −0.8 gives the D− profile choice probability
-`plogis(-0.8)`, about 31%, compared with 50% when tied. A party-match coefficient of 0.9 gives about
-71%. With a policy-rating coefficient of 0.3, a two-point rating advantage gives `plogis(2 * .3)`,
-about 65%. These are conditional comparisons; an AMCE averages over other attributes, opposing
-profiles and respondents, so it is a different quantity.
+Negative coefficients work the other way: at −0.8 the rule-breaking candidate is chosen with
+probability `plogis(-0.8)`, about 0.31, against an otherwise identical candidate. For a rating term
+the advantage is per rating point: a two-point lead at `coef = 0.3` gives `plogis(0.6)`, about 0.65.
+These compare two profiles that differ in one thing only. The AMCE, which averages over the other
+attributes, the competing profile and the respondents, is smaller; the package computes it for you.
 
-Choose values from comparable data where possible, paying attention to the score units and reference
-levels. A coefficient per point on a 0–10 rating scale cannot be reused unchanged after rescaling it
-to 0–1. When evidence is limited, compare several substantively plausible values rather than treating
-one convenient value as known. Increasing all coefficients does not increase every AMCE by the same
-factor.
+Take coefficients from earlier studies or a pilot where possible, and mind the units: a coefficient
+per point on a 0–10 scale is ten times one per point on a 0–1 scale. Without evidence, compare a few
+plausible values rather than treating one as known.
 
-`coef_sd` describes disagreement about the weight, not variation in the ratings. For example,
-`coef = -.8, coef_sd = .3` draws a democracy coefficient for each respondent from a normal distribution
-with mean −0.8 and SD 0.3. About two thirds lie between −1.1 and −0.5. The default, zero, gives everyone
-the same coefficient. Choose heterogeneity from evidence about individual differences, or compare
-labelled scenarios; there is no universal recommended SD.
+`mean` and `sd` in `term_rating()` describe the ratings. They are normal draws and are not clipped or
+rounded, so a mean of 4 with `sd = 2` produces some ratings below 0 and some above 10; a bounded
+rating scale is only approximated. `coef_sd`, zero by default, lets the coefficient itself vary across
+respondents; see [Heterogeneous coefficients](#heterogeneous-coefficients).
 
-Ratings use their own `mean` and `sd`. They are continuous, unbounded normal draws: a mean of 4 and SD
-of 2 can produce negative ratings or values above 10. Nothing is clipped or rounded. Use this feature
-when that approximation makes sense for your ratings; it does not simulate an exact bounded response
-scale. Each person's ratings, match and coefficients stay the same across all their tasks.
+## Simulating and estimating one experiment
 
-## Simulate and analyse one experiment
-
-This example uses 500 respondents, each choosing between two profiles in five tasks. The added columns
-show how the model scored the levels that were displayed. The negative policy rating in this output
-also illustrates the unbounded normal rating draws.
+`simulate_experiment()` draws one data set from the model: here 500 respondents with five tasks each
+and two profiles per task.
 
 ```r
 set.seed(1)
 data <- simulate_experiment(design, units = 500, n_tasks = 5, model = model)
-shown <- head(data[c("respondent", "task", "profile", "policy", "policy_rating", "party", "party_match")])
-shown$policy_rating <- round(shown$policy_rating, 2)
-shown
-
-fit <- estimate_paired(data, design)
-latent_estimates <- fit[c("term", "estimate", "std.error")]
-latent_estimates[-1] <- lapply(latent_estimates[-1], round, 3)
-latent_estimates
-
-fit_probability <- estimate_paired(data, design, scale = "probability")
-probability_estimates <- fit_probability[c("attribute", "level", "estimate", "std.error")]
-probability_estimates[3:4] <- lapply(probability_estimates[3:4], round, 3)
-probability_estimates
+print(head(data[c("respondent", "task", "profile", "policy", "policy_rating",
+                  "party", "party_match", "democracy", "y")]), digits = 3)
 ```
 
 ```text
-  respondent task profile policy policy_rating party party_match
-1          1    1       1   left          6.67     B           0
-2          1    1       2   left          6.67     A           1
-3          1    2       1  right         -0.46     C           0
-4          1    2       2   left          6.67     C           0
-5          1    3       1   left          6.67     C           0
-6          1    3       2  right         -0.46     A           1
-           term estimate std.error
-1 policy_rating    0.273     0.023
-2   party_match    1.092     0.082
-3     democracy   -0.862     0.065
-  attribute  level estimate std.error
-1    policy centre   -0.057     0.011
-2    policy  right   -0.109     0.013
-3     party      B   -0.006     0.011
-4     party      C   -0.034     0.010
-5 democracy     D-   -0.177     0.013
+  respondent task profile policy policy_rating party party_match democracy y
+1          1    1       1   left          6.67     B           0        D+ 0
+2          1    1       2   left          6.67     A           1        D- 1
+3          1    2       1  right         -0.46     C           0        D+ 0
+4          1    2       2   left          6.67     C           0        D+ 1
+5          1    3       1   left          6.67     C           0        D- 1
+6          1    3       2  right         -0.46     A           1        D+ 0
 ```
 
-The latent estimates are weights on the same scale as 0.3, 0.9 and −0.8 above. For an AMCE report,
-choose `scale = "probability"`: these are the AMCEs implied by the paired model's predictions, expressed
-as changes in choice probability relative to each attribute's reference level. For example, an estimate
-of −0.06 is a reduction of six percentage points. This conversion uses the whole fitted model; it is
-not `plogis()` applied to one coefficient.
+Each row is one profile, and `y` is 1 for the chosen one. Respondent 1 rates `left` 6.67 and `right`
+−0.46 (an unclipped rating below zero) and belongs to party A; in their first task they chose a `D-`
+candidate of their own party over a `D+` candidate of party B. The simulation adds a score column for
+each rating, score or match term (`policy_rating`, `party_match`). Real data need such columns before
+the paired logit can use ratings or matches.
 
-Use the latent scale when your question concerns the weights themselves. Use the probability scale
-when you want interpretable AMCEs or a comparison with ordinary AMCE regression. The default paired
-analysis includes all the model's terms. Supplying an attribute in `terms` instead selects its dummies:
-`terms = c("policy", "democracy")` asks a different question from using `"policy_rating"` and omits the
-party term.
+`estimate_paired()` fits the paired logit. By default it uses all the model's terms and reports their
+coefficients:
 
-Standard errors allow observations from the same respondent to be related. CR1 is the default and
-supports both scales; CR2 is also available for latent paired coefficients and ordinary AMCEs, but not
-paired probability output. See the [clustering guide](clustering.md) for choosing an inference method.
-The score columns expose only displayed levels: they cannot recover unseen ratings or distinguish
-matching no party from matching a party never shown to that respondent.
+```r
+fit <- estimate_paired(data, design)
+print(fit[c("term", "estimate", "std.error")], digits = 3)
+```
 
-## Compare power and choose a sample size
+```text
+           term estimate std.error
+1 policy_rating    0.273    0.0227
+2   party_match    1.092    0.0823
+3     democracy   -0.862    0.0653
+```
 
-The following examples use 200 runs to keep the guide quick. Use 1,000 or more for an actual analysis,
-and inspect the Monte Carlo standard errors. The first call evaluates the coefficient analysis at
-1,000 respondents and five tasks each. It reuses the prepared targets and took about five seconds on
-the test machine.
+The estimates are close to the coefficients that generated the data, 0.3, 0.9 and −0.8. The standard
+error is how far an estimate typically lands from the true value; an estimate is significant at the
+5 percent level when it is at least about twice its standard error. Standard errors allow the choices
+of one respondent to be related (clustered by respondent, CR1 by default; see the
+[clustering guide](clustering.md)).
+
+`scale = "probability"` reports the same fit as AMCEs (Hainmueller, Hopkins and Yamamoto 2014):
+changes in the probability of being chosen when a level replaces its attribute's reference level,
+averaged over respondents and the other attributes.
+
+```r
+fit_probability <- estimate_paired(data, design, scale = "probability")
+print(fit_probability[c("attribute", "level", "estimate", "std.error")], digits = 3)
+```
+
+```text
+  attribute  level estimate std.error
+1    policy centre -0.05735    0.0106
+2    policy  right -0.10857    0.0126
+3     party      B -0.00628    0.0110
+4     party      C -0.03437    0.0100
+5 democracy     D- -0.17655    0.0134
+```
+
+A `D-` candidate is chosen about 18 percentage points less often than a `D+` one, and a `right`
+candidate about 11 points less often than a `left` one, averaged over respondents' ratings. The policy
+rows compare the levels shown, not a one-point change in a rating. The party rows are small because B
+and C differ from A only in having fewer respondents who belong to them.
+
+Use `scale = "latent"`, the default, when the question is about the coefficients, as in a trade-off.
+Use `scale = "probability"` to report AMCEs or to compare with `estimate_amce()`.
+
+## Power
+
+`power_sim(model = )` simulates the experiment `sim_runs` times, fits the paired logit each time and
+reports the share of runs in which each coefficient is significant: its power. `estimators = "paired"`
+asks for the paired logit alone, on the latent scale.
 
 ```r
 latent <- power_sim(model = model, units = 1000, n_tasks = 5,
                     seed = 1, sim_runs = 200, estimators = "paired")
-latent_power <- latent$performance[c("term", "true_value", "power", "power_mcse", "type_s", "type_m", "coverage")]
-latent_power[-1] <- lapply(latent_power[-1], round, 3)
-as.data.frame(latent_power)
+latent
 ```
 
 ```text
-           term true_value power power_mcse type_s type_m coverage
-1 policy_rating        0.3     1          0      0  1.004    0.935
-2   party_match        0.9     1          0      0  0.999    0.930
-3     democracy       -0.8     1          0      0  0.999    0.950
+Conjoint simulation: 200 runs; logit DGP; CR1 / normal inference.
+Estimators: paired; scale: latent
+ estimator scale  type        term          attribute level true_value Power         Type S        Type M        Coverage      Runs (failed) Valid runs
+ paired    latent coefficient policy_rating policy    <NA>   0.3       1.000 (0.000) 0.000 (0.000) 1.004 (0.003) 0.935 (0.017) 200 (0)       200
+ paired    latent coefficient party_match   party     <NA>   0.9       1.000 (0.000) 0.000 (0.000) 0.999 (0.004) 0.930 (0.018) 200 (0)       200
+ paired    latent coefficient democracy     democracy D-    -0.8       1.000 (0.000) 0.000 (0.000) 0.999 (0.004) 0.950 (0.015) 200 (0)       200
+Monte Carlo standard errors in parentheses.
+Measures are conditional on runs with valid inference.
 ```
 
-All 200 runs detect each coefficient with the correct sign. Type M is close to 1, so significant
-estimates have little average exaggeration here, and coverage is about 93–95%. Power of 1 in this table
-means every simulated run rejected; it does not establish that rejection is certain in a new experiment.
-The reported MCSE is zero at this simulated boundary.
+With 1,000 respondents, each coefficient was significant in all 200 runs. `Type S` is the share of
+significant estimates with the wrong sign and `Type M` their average exaggeration (1.0 means none,
+1.5 means 50 percent too large); both are harmless at high power and grow as power falls. `Coverage`
+is how often the 95 percent confidence interval contained `true_value`; it should be near 0.95. The
+numbers in parentheses are Monte Carlo standard errors, how much each figure could move with a
+different set of 200 runs; a power of 1.000 (0.000) means every run rejected, not that rejection is
+certain. `Runs (failed)` counts runs whose fit could not be verified; they are excluded from the
+other columns, and `latent$failures` gives the reasons. `latent$performance` holds the same table,
+with the Monte Carlo standard errors in `_mcse` columns.
 
-Now compare the two estimators on the probability scale. Requesting both selects this scale and prints
-a message. This call also computes the missing AMCE targets once; use `amce = TRUE` in the original
-`utility_model()` call if you want to prepare those in advance. Save `both$model` to retain work done
-by the power call. The caller's original model is not modified automatically. This example, including
-AMCE target construction, took about nine seconds.
+## Comparing with AMCE regression
+
+`estimators = c("amce", "paired")` runs ordinary AMCE regression and the paired logit on the same
+simulated experiments. Both are then reported on the probability scale, so that they estimate the
+same AMCEs; `power_sim()` prints a message to say so, and another reminding you that the policy and
+party rows compare levels, not rating points or the match coefficient.
 
 ```r
 both <- power_sim(model = model, units = 1000, n_tasks = 5,
@@ -186,13 +232,11 @@ both <- power_sim(model = model, units = 1000, n_tasks = 5,
 model <- both$model
 amce_rows <- subset(as.data.frame(both$performance), estimator == "amce")
 paired_rows <- subset(as.data.frame(both$performance), estimator == "paired")
-comparison <- data.frame(
+data.frame(
   effect = paste(amce_rows$attribute, amce_rows$level, sep = ": "),
-  true_amce = amce_rows$true_value,
+  true_amce = round(amce_rows$true_value, 3),
   power_amce = amce_rows$power, power_paired = paired_rows$power,
-  sd_amce = amce_rows$emp_se, sd_paired = paired_rows$emp_se)
-comparison[-1] <- lapply(comparison[-1], round, 3)
-comparison
+  sd_amce = round(amce_rows$emp_se, 3), sd_paired = round(paired_rows$emp_se, 3))
 ```
 
 ```text
@@ -204,314 +248,183 @@ comparison
 5  democracy: D-    -0.164      1.000        1.000   0.010     0.010
 ```
 
-Both analyses nearly always detect the policy and democracy effects. For party B, the paired model
-detects the effect in about 76% of runs, compared with 32% for AMCE regression. Its estimates also vary
-less across runs: their SD is about 0.007 rather than 0.013. The democracy estimates have similar SDs
-in this example. The tables distinguish power from precision: power may already be near 1 even when
-one estimator has a smaller SD.
+AMCE regression detects the small party-B effect in 32 percent of runs, the paired logit in 76
+percent. `emp_se`, the standard deviation of the estimates across runs, shows why: the paired
+estimates vary about half as much. The paired logit uses each respondent's ratings and party match;
+AMCE regression does not.
 
-A gain in precision is possible because the paired analysis uses respondents' ratings and party matches,
-which the ordinary AMCE regression does not. Its size depends on the population and analysis. The gain
-also depends on the model being a useful description of choices: omitted or incorrectly coded features
-can bias the paired probability estimates. A power analysis can examine that risk only when the
-simulated assumptions include it. Neither estimator is guaranteed to be more efficient in every setting.
+The gain depends on the terms describing choices correctly. If respondents care about something the
+terms leave out, or about an attribute in a different way, the paired probability estimates can be
+biased while AMCE regression is unaffected. A power analysis shows this only if the mismatch is built
+into the simulated model.
 
-To compare sample sizes, keep the model and tasks fixed and change `units`. This short loop examines
-power for the party-B AMCE at 250 and 500 respondents. It reuses the cached AMCE targets from `both`.
-The same seed makes the comparison reproducible; each row still has only 200 runs. The loop took
-about five seconds.
+`model <- both$model` keeps the AMCE population targets that this call computed, so later calls do
+not repeat the work. `amce = TRUE` in `utility_model()` computes them up front.
+
+## Sample size
+
+Hold the model and `n_tasks` fixed and compare values of `units`. This loop reports power for the
+party-B AMCE at 250 and 500 respondents, reusing the cached targets.
 
 ```r
 sizes <- c(250, 500)
-size_rows <- vector("list", length(sizes))
+rows <- vector("list", length(sizes))
 for (i in seq_along(sizes)) {
   result <- power_sim(model = model, units = sizes[i], n_tasks = 5,
                       seed = 1, sim_runs = 200, estimators = "paired", scale = "probability")
   model <- result$model
   party_b <- subset(as.data.frame(result$performance), attribute == "party" & level == "B")
-  size_rows[[i]] <- data.frame(units = sizes[i], power = party_b$power,
-                               power_mcse = party_b$power_mcse)
+  rows[[i]] <- data.frame(units = sizes[i], power = party_b$power, power_mcse = party_b$power_mcse)
 }
-size_comparison <- do.call(rbind, size_rows)
-size_comparison[2:3] <- lapply(size_comparison[2:3], round, 3)
-size_comparison
+print(do.call(rbind, rows), digits = 2)
 ```
 
 ```text
   units power power_mcse
-1   250 0.260      0.031
-2   500 0.455      0.035
+1   250  0.26      0.031
+2   500  0.46      0.035
 ```
 
-A sample-size decision should consider every effect you need to estimate, its precision and the cost
-of extra respondents or tasks, not just the strongest effect's power. Prepared models can be reused
-with different sample sizes, task counts, experiment seeds and worker counts.
+Base the decision on the smallest effect you need to detect, and check every effect you plan to
+report. When coefficients vary across respondents, extra respondents raise power more than extra
+tasks do. Near the target power, increase `sim_runs` before choosing between neighbouring sizes: with
+200 runs the figures above have Monte Carlo standard errors of about 0.03.
 
-## Let respondents differ in their weights
+## Heterogeneous coefficients
 
-When coefficients vary, computing population targets may take minutes at the default budget of
-2,097,152 paired cells per group per batch. Prepare a model once and reuse it. The example below uses
-**131,072 cells** for a faster exploratory calculation; this is an explicit smaller budget, not a change
-to the default. It took about 10 seconds on the test machine. Its `reference_half_width` reports the
-uncertainty in each computed target. Increase precision when that uncertainty matters for bias, coverage or Type S/M.
+`coef_sd` lets a coefficient vary across respondents. With `coef = -0.8, coef_sd = 0.3`, each
+respondent's democracy coefficient is drawn from a normal distribution with mean −0.8 and SD 0.3, so
+about two thirds of respondents lie between −1.1 and −0.5.
+
+With varying coefficients, the population targets are computed by simulation, which takes minutes at
+the default precision. `control = list(paired_cells = 131072)` lowers the precision to finish in
+about ten seconds; use it to explore and the default for final numbers.
 
 ```r
-heterogeneous <- utility_model(design, terms = list(
-  term_rating("policy", mean = c(6, 5, 4), sd = c(2, 1.5, 2), coef = .3, coef_sd = .1),
-  term_match("party", share = c(.4, .3, .2), coef = .9),
-  term_dummy("democracy", coef = -.8, coef_sd = .3)),
+mixed <- utility_model(design, terms = list(
+  term_rating("policy", mean = c(6, 5, 4), sd = c(2, 1.5, 2), coef = 0.3, coef_sd = 0.1),
+  term_match("party", share = c(0.4, 0.3, 0.2), coef = 0.9),
+  term_dummy("democracy", coef = -0.8, coef_sd = 0.3)),
   control = list(paired_cells = 131072))
-heterogeneous_truth <- heterogeneous$truth[c("term", "input", "true_value", "reference_half_width")]
-heterogeneous_truth[-1] <- lapply(heterogeneous_truth[-1], round, 6)
-heterogeneous_truth
+print(mixed$truth[c("term", "input", "true_value", "reference_half_width")], digits = 3)
 ```
 
 ```text
            term input true_value reference_half_width
-1 policy_rating   0.3   0.287492             0.000430
-2   party_match   0.9   0.884827             0.001036
-3     democracy  -0.8  -0.780469             0.001241
+1 policy_rating   0.3      0.287              0.00043
+2   party_match   0.9      0.885              0.00104
+3     democracy  -0.8     -0.780              0.00124
 ```
 
-The policy target is about 0.287 rather than the input of 0.3; the democracy target is about −0.780
-rather than −0.8. Their reference half-widths are about 0.00043 and 0.00124, respectively, so this
-exploratory calculation distinguishes these changes from Monte Carlo noise. These half-widths describe
-uncertainty in the population targets, not the standard errors of estimates from an experiment.
+`true_value` now differs from `input`. The paired logit fits one coefficient to everyone's choices,
+and that coefficient is not the mean of the individual coefficients; here it is closer to zero, but it
+can move either way. The party target moved although its own coefficient is fixed, because the other
+two vary. Bias and coverage are measured against `true_value`, the target of the fitted analysis.
+`reference_half_width` is the precision of a simulated target: the policy target is 0.287 ± 0.0004,
+so its shift from 0.3 is not simulation noise.
 
-When respondents have different weights, a single fitted logit coefficient summarizes their choices;
-it need not equal the mean weight entered as `coef`. Even the party target can change while its own
-coefficient is fixed, because the policy and democracy coefficients vary. Targets can move in either
-direction across models; a shift towards zero in this example is not a general rule.
+Prepare such a model once and reuse it. Its targets do not depend on `units`, `n_tasks` or the
+experiment `seed`.
 
-The package measures bias, coverage and Type S/M against `true_value`, the target appropriate for the
-selected analysis. On the probability scale that target is always the true population AMCE, so a
-misspecified paired model's bias is included. The target calculation depends on the model and
-integration controls, not on the number of respondents or experiment seed.
+## Groups
 
-## Compare groups and understand exact zeros
-
-Group-specific inputs use lists named by group. Here two groups give opposite fixed ratings to the
-policy positions but have the same rating weight and the same democracy weight. This small example
-is integrated exactly and runs quickly.
+`groups` names respondent groups. Inputs that differ between groups are given as lists named by
+group; the others are shared. Here group A rates `right` one point above `left`, group B the reverse,
+and both groups have the same coefficients. The design is small enough for the targets to be computed
+exactly.
 
 ```r
-opposite_design <- conjoint_design(list(policy = c("left", "right"),
-                                       democracy = c("D+", "D-")))
-opposite <- utility_model(opposite_design, groups = c("A", "B"), amce = TRUE,
-  terms = list(
-    term_rating("policy", mean = list(A = c(0, 1), B = c(1, 0)), sd = 0, coef = 1),
-    term_dummy("democracy", coef = -.8)))
-opposite_truth <- opposite$truth[c("scale", "group", "attribute", "level", "true_value", "null")]
-opposite_truth$true_value <- round(opposite_truth$true_value, 6)
-opposite_truth
+small <- conjoint_design(list(policy = c("left", "right"), democracy = c("D+", "D-")))
+grouped <- utility_model(small, groups = c("A", "B"), amce = TRUE, terms = list(
+  term_rating("policy", mean = list(A = c(0, 1), B = c(1, 0)), sd = 0, coef = 1),
+  term_dummy("democracy", coef = -0.8)))
+print(grouped$truth[c("scale", "group", "attribute", "level", "true_value", "null")], digits = 3)
 ```
 
 ```text
          scale group attribute level true_value  null
-1       latent     A    policy  <NA>   1.000000 FALSE
-2       latent     A democracy    D-  -0.800000 FALSE
-3  probability     A    policy right   0.217525 FALSE
-4  probability     A democracy    D-  -0.172066 FALSE
-5       latent     B    policy  <NA>   1.000000 FALSE
-6       latent     B democracy    D-  -0.800000 FALSE
-7  probability     B    policy right  -0.217525 FALSE
-8  probability     B democracy    D-  -0.172066 FALSE
-9       latent B - A    policy  <NA>   0.000000  TRUE
-10      latent B - A democracy    D-   0.000000  TRUE
-11 probability B - A    policy right  -0.435050 FALSE
-12 probability B - A democracy    D-   0.000000  TRUE
+1       latent     A    policy  <NA>      1.000 FALSE
+2       latent     A democracy    D-     -0.800 FALSE
+3  probability     A    policy right      0.218 FALSE
+4  probability     A democracy    D-     -0.172 FALSE
+5       latent     B    policy  <NA>      1.000 FALSE
+6       latent     B democracy    D-     -0.800 FALSE
+7  probability     B    policy right     -0.218 FALSE
+8  probability     B democracy    D-     -0.172 FALSE
+9       latent B - A    policy  <NA>      0.000  TRUE
+10      latent B - A democracy    D-      0.000  TRUE
+11 probability B - A    policy right     -0.435 FALSE
+12 probability B - A democracy    D-      0.000  TRUE
 ```
 
-Both coefficient differences are exactly zero: the groups share weights of 1 and −0.8. Their democracy
-AMCE difference is also exactly zero, because exchanging the policy levels leaves the democracy effect
-unchanged. These three differences are certified nulls. The policy AMCEs have opposite signs, so their
-difference is −0.43505 and is not a null.
+`amce = TRUE` computes the AMCE targets up front, so both scales appear. The `B - A` rows are the
+differences between groups, which `power_sim()` also tests. Three are marked `null = TRUE`: the
+package has proved from the inputs that they are exactly zero, because the groups share their
+coefficients and swapping the policy levels leaves the democracy effect unchanged. Such rows report
+`type_1_error`, the share of runs that wrongly find a difference, instead of power. The policy AMCEs
+have opposite signs, so their difference is not zero. A zero is never certified because a computed
+number is small; `null = FALSE` means no zero was proved, not that an effect was.
 
-With random coefficients, each distinct group's targets are calculated separately and can differ by
-Monte Carlo noise even when a symmetry proves a particular difference is zero. The package reports
-that difference as exactly zero. It never certifies a null just because a computed number is small.
-`null = FALSE` means no zero was proved, not that a nonzero effect was proved.
+`units` and `n_tasks` can be given per group: `units = c(A = 300, B = 300)`.
 
-A zero population mean does not imply that everyone is unaffected. For example, respondents who rate
-two policy levels equally *on average* can still have positive or negative personal policy effects.
-A certified zero AMCE therefore retains any respondent-level effect SD and its uncertainty.
+## Assumptions
 
-## Read the results
-
-`power` is the share of valid runs rejecting a zero effect when the target is not certified null.
-For a certified null, the same rejection rate is reported as `type_1_error`: a false positive.
-`power_mcse` and the other `_mcse` columns show uncertainty from using a finite number of simulation
-runs. For example, power near 0.5 with 200 valid runs has an MCSE of about 0.035.
-
-`type_s` is the fraction of significant estimates with the wrong sign. `type_m` is their average
-exaggeration ratio: 1 means the estimated magnitude matches the target on average, and 2 means twice
-the target's magnitude. They condition on significant results and are undefined for a zero target.
-`coverage` is the proportion of confidence intervals containing the target; a nominal 95% interval
-should have coverage near 0.95 when the inference works well. The analytic Type S/M columns provide a
-simplified normal-theory benchmark, not additional simulation results. See the
-[error-rate guide](error_rates.md) for definitions and interpretation.
-
-An unresolved-sign warning means the numerical target is too uncertain or too close to zero for its
-sign and exaggeration ratios to be reliable. Type S/M remain in the result where defined; do not treat
-them as settled answers. The warning identifies the affected effects and distinguishes reference
-uncertainty from numerical limitations. More reference simulation can help the former, but cannot
-settle an effect that is exactly zero. Review the assumptions and, where available, the symmetry or
-analytic proof for such an effect.
-
-A fit the package cannot verify is reported as failed (`nonconvergence`) and excluded from that
-effect's summaries; it is never counted as nonsignificant. A failed paired analysis does not discard
-valid AMCE estimates from the same experiment. Check `n_failed`, `n_valid` and `$failures`. A failed
-group affects its own estimates and contrasts using it, while unrelated groups can retain inference.
-
-## Limits and practical cautions
-
-- Profiles are independently and uniformly randomized over each attribute's levels. The simulator
-  does not implement restricted assignment, unequal level probabilities, candidate relabelling,
-  survey weights, opt-outs or pooled-group analyses.
-- Ratings and coefficient deviations are independent normal draws within group. Correlated
-  preferences, bounded ratings, observed respondent tables and multiple simultaneous matches are
-  not supported. This is a single-logit analysis of potentially heterogeneous respondents, not a
-  mixed-logit estimator.
-- Probability conversion is an AMCE interpretation under the independent uniform assignment
-  assumptions. With other assignment schemes, the standalone estimator supplies the stated
-  regression projection of its predictions.
-- Paired power requires a latent prepared model. AMCE-only power accepts a calibrated or latent one.
-  Latent `coef_sd` can differ by term and group; calibrated AMCE-scale `sigma` still has its existing
-  scalar interface. The package does not calibrate these latent models to requested AMCEs.
-- Coefficient ratios and equal-rating democracy penalties are not power targets here. Under
-  heterogeneity, a fitted ratio need not be the average respondent's trade-off. See the
-  [trade-off proposal](TODO.md) for the separate questions that still need an implementation.
+- Profiles are drawn independently and uniformly over each attribute's levels. Restricted or
+  weighted randomization, more than two profiles per task, opt-outs and survey weights are not
+  simulated.
+- Ratings and coefficient deviations are independent normal draws within group. A respondent matches
+  at most one level of a match term.
+- The paired logit fits one coefficient vector to all respondents; it is not a mixed logit.
+- Paired power requires a model from `utility_model()`; its coefficients are not calibrated to
+  requested AMCEs. To request AMCEs directly, use `true_amce`, which runs AMCE regression only.
 
 ## Technical appendix
 
-### Analysis targets, output names and omitted attributes
+**Model.** Respondent *i* chooses profile 1 in task *t* with probability
+logit⁻¹(*U*<sub>*it*1</sub> − *U*<sub>*it*2</sub>), where *U*<sub>*itj*</sub> = Σ<sub>*k*</sub>
+*β*<sub>*ik*</sub> *x*<sub>*itjk*</sub> sums, over terms *k*, the respondent's coefficient times
+the profile's score on that term: a dummy, a fixed score, a match indicator or the respondent's
+rating. Coefficients and respondent scores are fixed across a respondent's tasks. Each task has two
+profiles with complementary outcomes.
 
-Paired predictors are profile-1 minus profile-2 scores, with no intercept. With fixed coefficients and
-all generating columns present with the same coding, the population logit target equals the input
-coefficient vector. Reordering columns preserves that result; recoding changes it. For example, a
-binary score `c(0, 2)` with weight 0.3 has a dummy coefficient of 0.6. Under heterogeneity or an altered
-analysis the target solves the population logit score equations, rather than copying coefficient means.
+**Estimator.** `estimate_paired()` fits a logit without intercept to the profile-1-minus-profile-2
+differences of the scores. Positive coefficients favour profile 1. Standard errors are clustered by
+respondent: CR1 by default, CR2 (via `clubSandwich`) on the latent scale only. The probability scale
+projects the fitted choice probabilities onto the ordinary AMCE regression; its standard errors
+include the uncertainty of the fitted coefficients and of the sampled profiles and respondents. With
+dummy terms for every attribute and nothing else, the probability estimates and their CR1 standard
+errors coincide with ordinary AMCE regression.
 
-A dummy-only paired analysis covering every attribute gives the same probability estimates and CR1
-covariance as ordinary AMCE regression whenever both fits are finite and estimable. Probability CR1
-includes uncertainty from both fitted logit coefficients and sampled profiles/respondents. CR2 uses
-verified group fits and supporting models for contrasts; requesting paired probability CR2 is an error.
-CR1 finite-sample corrections and `inference = "t"` use full-sample counts, including failed groups.
-Each group supporting an effect still needs at least two respondents.
+**Targets.** With fixed coefficients and an analysis that uses the generating terms with the same
+coding, the latent target equals the input coefficients. Otherwise it solves the population logit
+score equations, exactly when all SDs are zero and the design is small enough to enumerate, and by
+simulation otherwise (`paired_cells` per group per batch, 16 batches; the default is 2,097,152).
+`reference_half_width` is the half-width of a confidence interval for a simulated target.
+Probability-scale targets are the true population AMCEs, so a misspecified paired analysis shows its
+bias. A target is marked `null = TRUE` only when a symmetry of the inputs proves it is zero, for
+example identical inputs for a level and its reference, exchangeable levels, or coefficients shared
+by two groups. A warning about an unresolved sign means a target is too close to zero, relative to
+its precision, for Type S and Type M to be meaningful.
 
-Latent-model power tables use `true_value` on both reporting scales; existing calibrated results use
-`true_amce`. Check `scale` and `estimator` when combining tables. Standalone `estimate_paired()` follows
-`estimate_amce()` for group order: factor levels, or first appearance for character groups. Reordering
-a grouped data frame can therefore change the reference group when `groups` is omitted. Pass
-`groups = model$groups` to keep the prepared order explicit.
+**Custom analyses.** `paired_terms` in `power_sim()` and `terms` in `estimate_paired()` select which
+terms enter the paired logit: an attribute name selects its dummies, a score column name such as
+`policy_rating` selects that term. Probability output keeps rows for every attribute, including ones
+left out of the analysis, flagged `in_analysis = FALSE`; their targets are still the full population
+AMCEs. Targets for a custom analysis are cached in `result$model$analysis_truths`.
 
-An attribute name in `paired_terms` selects its full dummy block; a generated score-column name selects
-that term. Probability output retains rows for **all** design AMCEs, including attributes omitted from
-the paired predictors. For example, `paired_terms = c("policy_rating", "democracy")` omits party.
-The package emits a message and marks its paired probability rows `in_analysis = FALSE` in `$truth`
-and `$performance`. Predictions do not use party, but those rows' bias and coverage still use the full
-population party AMCE. Their rejection rates should not be read as the ability to recover the omitted
-attribute's true effect. Ordinary AMCE rows are unchanged. `in_analysis = TRUE` only says that at least
-one analysis term uses the attribute; it is not a guarantee of correct specification.
+**Reproducibility and speed.** Each simulated experiment has its own random-number stream, so
+results do not depend on `cores`, and the first runs are unchanged when `sim_runs` grows. Target
+calculations use separate streams and do not change with `units`, `n_tasks`, `estimators` or `seed`.
+Reuse `result$model` to keep cached targets. `control` accepts `seed`, `paired_cells`,
+`exact_max_pairs`, `exact_max_rows`, `exact_max_cells`, `verification_pairs`, `verification_draws`
+and `verification_batches`; see `?utility_model`.
 
-### Prepared-model caches
+## References
 
-`model$truth` holds the default paired analysis and any computed AMCE truths. Missing AMCE targets
-are filled when power first needs them. Custom latent-analysis truths are kept separately in
-`model$analysis_truths`, keyed by the ordered `paired_terms`; they do not replace the default truth.
-Both caches are returned in `result$model`. Retain that model before another call, including in loops,
-to avoid repeating target calculations. Treat a prepared model as immutable: changing its coefficient
-or control fields by hand can invalidate its cached truths; construct a new model for changed assumptions.
-Caches affect reference computation, not the experiment's profile or choice draws.
+Graham, M. H., & Svolik, M. W. (2020). Democracy in America? Partisanship, polarization, and the
+robustness of support for democracy in the United States. *American Political Science Review*,
+114(2), 392–409. <https://doi.org/10.1017/S0003055420000052>
 
-### Certification and sign diagnostics
-
-Certification uses sufficient proofs, never numerical closeness or a confidence interval containing
-zero. Rules include identical utility at a level and its reference, exchangeable level distributions,
-supported binary-symmetry cases, inactive independent predictors, and exact matching-model coefficients.
-Group differences may be certified from shared targets, two certified zeros, equal analytic coefficients,
-or supported level-permutation/sign symmetries of the full specification.
-
-A symmetry comparison must use one common level permutation for all terms on an attribute. It matches
-coefficient means and SDs, rating distributions, fixed scores and canonical match probabilities exactly,
-including no-match probability. A sign reversal changes coefficient means, not SDs or respondent score
-distributions. For an AMCE target, the target attribute's permutation must preserve its reference and
-compared level and cannot reverse its utility sign; other attributes may be permuted or sign-reversed.
-For a latent score/rating/match coefficient, a permutation may also act on its target attribute; a dummy
-target must retain the compared levels. Paired analyses require complete dummy blocks for this proof.
-These conditions are sufficient, not a complete catalogue of all possible zero differences.
-
-Reported certified zeros have zero mean-reference uncertainty. Their AMCE SD and its uncertainty remain
-unless the individual contrast itself is identically zero. Numerical paired diagnostics retain the raw
-coefficient solution, reference covariance, scaled scores and Newton corrections; substituting certified
-zeros in the report does not rerun the solver or change that raw solution.
-
-`sign_resolved` is `NA` for certified nulls and `TRUE` for analytic nonzero targets. Other rows compare
-absolute target size against their own reference half-width, solver correction and roundoff guard.
-For contrasts, errors are combined in the coefficients' original units. These are numerical guards,
-not proved bounds on approximation error. A numerically unresolved exact-zero AMCE may involve only
-roundoff, without any paired solver error.
-
-### Integration, precision and runtime
-
-Finite-support integration is exact when coefficient/rating SDs are zero and the profile-reference and
-joint match-cell limits permit enumeration. Otherwise, paired targets use independent respondent and
-ordered-profile-pair cells. The same cells are replayed for a shared damped Newton solve in bounded
-blocks. AMCE integration uses independent reference streams and antithetic respondent nodes with the
-existing forward AMCE transform. A population Gram check tests identification analytically, including
-rare predictors; a rank-deficient sampled reference raises a separate budget diagnostic.
-
-`control` accepts `seed`, `exact_max_pairs`, `exact_max_rows`, `exact_max_cells`, `paired_cells`,
-`verification_pairs`, `verification_draws` and `verification_batches`. `paired_cells` is per group per
-batch and is independent of the AMCE respondent/profile budgets. Budgets are fixed, with no
-acceptance-based reference resampling. The solver starts from mapped coefficient means when possible; if that start fails, it retries from zero on the same fixed cells.
-If neither solve succeeds, it raises an error rather than returning its last iterate as a truth.
-
-The default is **2,097,152 paired cells per group per batch**, with 16 batches. It was the first of five
-candidate budgets to meet a 0.001 standardized latent half-width target in all seven development
-scenarios. All seven also passed an interval-overlap check at 4,194,304 cells: each raw coefficient
-change was smaller than the sum of its two half-widths. This is stability evidence, not a universal
-bound on integration bias.
-
-The table gives **historical budget-selection timings before the later solver warm starts**,
-measured on an Apple M1 Pro, eight logical CPUs, R 4.2.1 and OpenBLAS 0.3.29. Scenarios
-ran concurrently. It records how the default was chosen, not current runtime predictions. The original
-heterogeneous guide run took 414.1 seconds, versus 370.4 for its budget-benchmark counterpart under a
-different concurrent workload; neither measures the fast fixed-coefficient example above.
-
-| Historical scenario | Largest standardized half-width | Construction seconds |
-| --- | ---: | ---: |
-| Three-attribute heterogeneous example | 0.000267 | 370.4 |
-| Weak coefficient heterogeneity | 0.000055 | 227.7 |
-| Two-attribute heterogeneous rating model | 0.000197 | 124.1 |
-| Rare party matches | 0.000248 | 218.5 |
-| Omitted party analysis | 0.000341 | 207.9 |
-| Two groups with different rating distributions | 0.000689 | 438.8 |
-| Five-attribute model | 0.000325 | 380.5 |
-
-Reference MCSEs and nominal simultaneous 99% batch-t intervals use separate families for each paired
-latent analysis and for the model's AMCE means/SDs across groups. Distinct base-group quantities count
-once, including analytic and certified-null quantities; shared-reference copies and contrasts add no
-comparisons. The 99% statement applies within a family, not jointly across analyses and families.
-Independent-group MCSEs combine in quadrature; their half-widths add. Both probability estimators reuse
-the same AMCE family. Adding another reference family or using a cache cannot widen an existing family's
-intervals or change its sign flags.
-
-These intervals describe Monte Carlo error, not solver error or integration bias. Reference uncertainty
-is included in `bias_mcse` and the coverage-sensitivity columns. It does not change the observed fraction
-of experiment fits rejecting zero; null classification comes from proofs. More experiment runs reduce
-uncertainty in estimated rejection rates, but do not improve the population target's precision.
-
-### Random streams and reproducibility
-
-Reference calculations depend on model inputs and integration controls, never sample size or experiment
-seed. Group roots use separate L'Ecuyer streams; within each root, paired batch b uses substream
-`2*b - 1` and AMCE batch b uses `2*b`. Experiment streams retain substream zero, including when truth and
-experiment seeds have equal values. Identical group specifications share their first occurrence's
-reference; symmetry-certified differences need not share the two groups' numerical references.
-
-Analysis choices, analytic shortcuts and caches do not shift those allocations. Truth calculations and
-`power_sim()` restore the caller's RNG, including Box-Muller's cached state; `simulate_experiment()`
-advances it. Results agree across worker counts and longer run counts retain earlier experiment runs.
-`seed` in `power_sim()` controls experiments; `control$seed` in `utility_model()` controls target
-integration. Changing either seed is not a way to repair a poorly specified model.
+Hainmueller, J., Hopkins, D. J., & Yamamoto, T. (2014). Causal inference in conjoint analysis:
+Understanding multidimensional choices via stated preference experiments. *Political Analysis*,
+22(1), 1–30. <https://doi.org/10.1093/pan/mpt024>
