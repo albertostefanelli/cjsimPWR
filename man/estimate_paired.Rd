@@ -35,7 +35,7 @@ is available only on the latent scale.}
 \item{inference}{\code{"normal"}, \code{"t"} (all respondents minus one degrees of freedom), or
 \code{"Satterthwaite"} (CR2 only). Defaults match \code{\link[=estimate_amce]{estimate_amce()}}.}
 
-\item{alpha}{Two-sided significance level.}
+\item{alpha}{Two-sided significance level, at least 1e-10.}
 
 \item{scale}{\code{"latent"} for logit coefficients or \code{"probability"} for AMCE projections.}
 }
@@ -55,6 +55,11 @@ includes uncertainty from the fitted logit and the sampled profiles/respondents.
 Probability output has an AMCE interpretation under independent uniform assignment;
 otherwise it is the stated regression projection. Probability CR1 includes both sources of
 uncertainty. No intercept is added to the paired logit. Labels are never interpreted as formulas.
+
+For repeated fits in parallel, use PSOCK workers (\code{parallel::makePSOCKcluster()}), as
+\code{\link[=power_sim]{power_sim()}} does. With a threaded BLAS such as OpenMP OpenBLAS, forked workers
+(\code{parallel::mclapply()}, \code{future::multicore}) can hang after the parent has fitted a large
+dataset, because the fit's \code{qr()} call starts BLAS threads that forked children cannot use.
 }
 \examples{
 design <- conjoint_design(list(quality = c("low", "high"), democracy = c("D+", "D-")))

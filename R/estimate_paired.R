@@ -2,7 +2,7 @@
 paired_numerics <- function() {
   list(rank_tol = 1e-10, gram_rcond_min = 1e-12, estimability_tol = 1e-8,
        information_rcond_min = 1e-12, maxit = 100L, score_tol = 1e-10,
-       step_tol = 1e-10, line_search_max_halvings = 30L, armijo = 1e-4,
+       step_tol = 1e-10, line_search_max_halvings = 30L, armijo = 1e-4, flat_gain = 1e-8,
        fallback_maxit = 1000L, fallback_factr = 1, fallback_pgtol = 1e-12)
 }
 
@@ -83,18 +83,34 @@ solve_paired_logit <- function(evaluate, start, numerics = paired_numerics()) {
     if (diagnostics$max_score <= numerics$score_tol && diagnostics$relative_step <= numerics$step_tol) {
       return(result("converged"))
     }
+    # Near the optimum the predicted gain of a full step falls below the rounding error of the
+    # summed log-likelihood (about sqrt(n) * eps * |loglik|), so the log-likelihood can no longer
+    # rank the iterates. There a step is judged instead by the Newton decrement of its score in the
+    # current metric, which keeps full precision until the score itself reaches rounding level.
+    decrement <- sum(U * delta)
+    flat <- decrement <= numerics$flat_gain * max(1, abs(value$loglik))
     ok <- FALSE
     for (halving in 0:numerics$line_search_max_halvings) {
       step <- 2^-halving
       candidate <- gamma + step * delta
       next_value <- tryCatch(evaluate(candidate), error = function(e) NULL)
-      if (!is.null(next_value) && length(next_value$loglik) == 1L &&
-          all(is.finite(c(candidate, next_value$loglik, next_value$score,
-                          next_value$information, next_value$eta))) &&
-          next_value$loglik >= value$loglik + numerics$armijo * step * sum(U * delta) -
-            64 * .Machine$double.eps * max(1, abs(value$loglik))) {
+      if (is.null(next_value) || length(next_value$loglik) != 1L ||
+          length(next_value$score) != length(U) ||
+          !all(is.finite(c(candidate, next_value$loglik, next_value$score,
+                           next_value$information, next_value$eta)))) next
+      if (next_value$loglik >= value$loglik + numerics$armijo * step * decrement -
+          64 * .Machine$double.eps * max(1, abs(value$loglik))) {
         ok <- TRUE
+        diagnostics$step_rule <- "armijo"
         break
+      }
+      if (flat) {
+        Un <- as.numeric(next_value$score)
+        if (sum(Un * backsolve(ch, forwardsolve(t(ch), Un))) < decrement) {
+          ok <- TRUE
+          diagnostics$step_rule <- "decrement"
+          break
+        }
       }
     }
     if (!ok) return(result("line_search"))
@@ -188,6 +204,8 @@ paired_model_data <- function(data, design, terms, groups) {
       if (is.null(x) || !is.numeric(x) || !is.null(dim(x)) || any(!is.finite(x))) {
         stop("Selected score column '", a$source_column, "' must be finite numeric values.", call. = FALSE)
       }
+      # Valid integer scores can have differences outside the 32-bit integer range.
+      x <- as.numeric(x)
       x[r1] - x[r2]
     }
   }, numeric(length(r1)))
@@ -313,22 +331,37 @@ fit_paired_block <- function(X, y) {
        failure_reason = if (accepted) NA_character_ else "nonconvergence", diagnostics = diagnostics)
 }
 
+# `A` maps the kept columns to all columns in original units; `A_std` does so in the scaled units
+# used for rank detection, where estimability is judged.
 paired_reduce <- function(X, paired = TRUE) {
   p <- ncol(X)
-  if (!nrow(X)) return(list(keep = integer(), X = X[, FALSE, drop = FALSE], A = matrix(0, 0, p), rank = 0L))
   scales <- if (paired) paired_rms(X) else rep(1, p)
+  none <- list(keep = integer(), X = X[, FALSE, drop = FALSE], A = matrix(0, 0, p),
+               A_std = matrix(0, 0, p), scales = scales, rank = 0L)
+  if (!nrow(X)) return(none)
   nonzero <- which(scales > 0 & is.finite(scales))
-  if (!length(nonzero)) return(list(keep = integer(), X = X[, FALSE, drop = FALSE], A = matrix(0, 0, p), rank = 0L))
+  if (!length(nonzero)) return(none)
   Xs <- sweep(X[, nonzero, drop = FALSE], 2L, scales[nonzero], "/")
   q <- qr(Xs, tol = if (paired) paired_numerics()$rank_tol else 1e-7, LAPACK = FALSE)
   keep <- nonzero[q$pivot[seq_len(q$rank)]]
-  A <- matrix(0, length(keep), p)
+  A <- A_std <- matrix(0, length(keep), p)
   if (length(keep)) {
     qr_reduced <- qr(sweep(X[, keep, drop = FALSE], 2L, scales[keep], "/"),
                      tol = if (paired) paired_numerics()$rank_tol else 1e-7, LAPACK = FALSE)
-    A[, nonzero] <- sweep(sweep(qr.coef(qr_reduced, Xs), 1L, scales[keep], "/"), 2L, scales[nonzero], "*")
+    A_std[, nonzero] <- qr.coef(qr_reduced, Xs)
+    A[, nonzero] <- sweep(sweep(A_std[, nonzero, drop = FALSE], 1L, scales[keep], "/"), 2L, scales[nonzero], "*")
   }
-  list(keep = keep, X = X[, keep, drop = FALSE], A = A, rank = length(keep))
+  list(keep = keep, X = X[, keep, drop = FALSE], A = A, A_std = A_std, scales = scales, rank = length(keep))
+}
+
+# A contrast is estimable when the kept columns reproduce it. Comparing in scaled units, relative to
+# each contrast's size, stops a change of units from making an exactly aliased coefficient estimable.
+paired_estimable <- function(full_C, red, tol) {
+  scaled <- full_C
+  nonzero <- red$scales > 0 & is.finite(red$scales)
+  scaled[, nonzero] <- sweep(full_C[, nonzero, drop = FALSE], 2L, red$scales[nonzero], "/")
+  residual <- scaled - scaled[, red$keep, drop = FALSE] %*% red$A_std
+  apply(abs(residual), 1L, max) <= tol * apply(abs(scaled), 1L, max)
 }
 
 paired_output_layout <- function(input, scale) {
@@ -402,7 +435,7 @@ paired_covariance <- function(blocks, C, eligible, n, G, k, scale, vcov, inferen
       lambda <- stats::plogis(eta) * stats::plogis(-eta)
       residual <- (2 * b$y - 1) * stats::plogis(-(2 * b$y - 1) * eta)
       Hinv <- if (ncol(Xs)) chol2inv(chol(crossprod(Xs * lambda, Xs))) else matrix(0, 0, 0)
-      scores <- rowsum(Xs * residual, b$identifiers$respondent, reorder = FALSE)
+      scores <- rowsum(Xs * residual, b$cluster, reorder = FALSE)
       if (scale == "probability") {
         Z <- b$projection$X
         derivative <- matrix(0, nrow(Z), ncol(Xs))
@@ -420,18 +453,22 @@ paired_covariance <- function(blocks, C, eligible, n, G, k, scale, vcov, inferen
         list(V = crossprod(influence))
       } else {
         aux <- paired_auxiliary_glm(Xs, b$y, b$fit$coefficients * b$fit$diagnostics$scales, eta)
-        cov <- clubSandwich::vcovCR(aux$model, cluster = b$identifiers$respondent, type = "CR2")
+        cov <- clubSandwich::vcovCR(aux$model, cluster = b$cluster, type = "CR2")
         models[[g]] <- list(aux = aux, covariance = cov, X = Xs)
         diagnostics[[g]] <- aux$warnings
         list(V = sweep(sweep(as.matrix(cov), 1L, b$fit$diagnostics$scales, "/"),
                        2L, b$fit$diagnostics$scales, "/"))
       }
     }, error = function(e) list(error = conditionMessage(e)))
+    if (is.null(cov$error)) {
+      if (vcov == "CR1") cov$V <- cov$V * G / (G - 1) * (n - 1) / (n - k)
+      # Infinite entries would reach other groups' rows through 0 * Inf in the contrast product.
+      if (any(!is.finite(cov$V))) cov <- list(error = "nonfinite group covariance; check predictor units")
+    }
     if (!is.null(cov$error)) {
       failed <- union(failed, needed)
       errors[[as.character(g)]] <- cov$error
     } else {
-      if (vcov == "CR1") cov$V <- cov$V * G / (G - 1) * (n - 1) / (n - k)
       V <- V + C[[g]] %*% cov$V %*% t(C[[g]])
     }
   }
@@ -465,7 +502,7 @@ paired_covariance <- function(blocks, C, eligible, n, G, k, scale, vcov, inferen
                        blocks[[b]]$fit$coefficients * blocks[[b]]$fit$diagnostics$scales)
             eta <- c(blocks[[a]]$fit$eta, blocks[[b]]$fit$eta)
             aux <- paired_auxiliary_glm(joint, yy, start, eta)
-            cluster <- c(as.character(blocks[[a]]$identifiers$respondent), as.character(blocks[[b]]$identifiers$respondent))
+            cluster <- c(blocks[[a]]$cluster, blocks[[b]]$cluster)
             md <- list(aux = aux, covariance = clubSandwich::vcovCR(aux$model, cluster = cluster, type = "CR2"))
             contrast <- cbind(sweep(C[[a]][r, , drop = FALSE], 2L, blocks[[a]]$fit$diagnostics$scales, "/"),
                               sweep(C[[b]][r, , drop = FALSE], 2L, blocks[[b]]$fit$diagnostics$scales, "/"))
@@ -502,7 +539,7 @@ paired_covariance <- function(blocks, C, eligible, n, G, k, scale, vcov, inferen
 #'   is available only on the latent scale.
 #' @param inference `"normal"`, `"t"` (all respondents minus one degrees of freedom), or
 #'   `"Satterthwaite"` (CR2 only). Defaults match [estimate_amce()].
-#' @param alpha Two-sided significance level.
+#' @param alpha Two-sided significance level, at least 1e-10.
 #' @param scale `"latent"` for logit coefficients or `"probability"` for AMCE projections.
 #'
 #' @return A data frame of group effects followed by group-minus-first-group differences, with
@@ -513,6 +550,11 @@ paired_covariance <- function(blocks, C, eligible, n, G, k, scale, vcov, inferen
 #' @details Probability output has an AMCE interpretation under independent uniform assignment;
 #'   otherwise it is the stated regression projection. Probability CR1 includes both sources of
 #'   uncertainty. No intercept is added to the paired logit. Labels are never interpreted as formulas.
+#'
+#'   For repeated fits in parallel, use PSOCK workers (`parallel::makePSOCKcluster()`), as
+#'   [power_sim()] does. With a threaded BLAS such as OpenMP OpenBLAS, forked workers
+#'   (`parallel::mclapply()`, `future::multicore`) can hang after the parent has fitted a large
+#'   dataset, because the fit's `qr()` call starts BLAS threads that forked children cannot use.
 #' @seealso [utility_model()], [estimate_amce()], [power_sim()]
 #' @md
 #' @export
@@ -536,13 +578,18 @@ estimate_paired <- function(data, design, terms = NULL, groups = NULL, vcov = c(
   ng <- length(input$groups)
   J <- nrow(input$analysis)
   P <- sum(lengths(design$levels) - 1L) + 1L
+  # Integer respondent codes cluster tasks and profiles by equality of the original identifiers.
+  cluster <- input$amce$cluster
   blocks <- lapply(seq_len(ng), function(g) {
     reduced <- paired_reduce(input$X[[g]])
     ids <- input$identifiers[[g]]
     rows <- which(input$amce$group_index == g)
-    projection <- paired_reduce(input$amce$X[rows, (g - 1L) * P + seq_len(P), drop = FALSE], paired = FALSE)
+    # Only probability output projects predictions onto the AMCE design.
+    projection <- if (scale == "probability") {
+      paired_reduce(input$amce$X[rows, (g - 1L) * P + seq_len(P), drop = FALSE], paired = FALSE)
+    }
     list(reduced = reduced, fit = NULL, fit_design = reduced$X, y = input$y[[g]], identifiers = ids,
-         profile_rows = rows, profile_id = data$respondent[rows],
+         cluster = cluster[ids$row1], profile_rows = rows, profile_id = cluster[rows],
          local1 = match(ids$row1, rows), local2 = match(ids$row2, rows), projection = projection)
   })
   # Counts include all groups even when their subsequent fit fails.
@@ -563,7 +610,7 @@ estimate_paired <- function(data, design, terms = NULL, groups = NULL, vcov = c(
     full_C <- layout$C[, columns, drop = FALSE]
     involved <- rowSums(abs(full_C)) > 0
     red <- if (scale == "latent") b$reduced else b$projection
-    estimable <- apply(abs(full_C - C[[g]] %*% red$A), 1L, max) < numerics$estimability_tol
+    estimable <- paired_estimable(full_C, red, numerics$estimability_tol)
     out$failure_reason[involved & !estimable] <- "non_estimable"
     if (!nrow(b$fit_design)) next
     b$fit <- fit_paired_block(b$fit_design, b$y)
