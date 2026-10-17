@@ -77,9 +77,11 @@ power_latent <- function(model, units, n_tasks, estimators, paired_terms, scale,
   runs <- do.call(rbind, lapply(seq_along(results), function(i) {
     data.frame(run = i, results[[i]], row.names = NULL)
   }))
+  # Index each effect's runs once instead of rescanning the run table per effect.
+  by_effect <- split(seq_len(nrow(runs)), factor(runs$effect_id, levels = truth$effect_id))
   performance <- do.call(rbind, lapply(truth$effect_id, function(id) {
-    rows <- runs[runs$effect_id == id, , drop = FALSE]
-    summarise_runs(rows$estimate, rows$std.error, truth$true_value[id], alpha, rows$df,
+    i <- by_effect[[id]]
+    summarise_runs(runs$estimate[i], runs$std.error[i], truth$true_value[id], alpha, runs$df[i],
       null = truth$null[id], reference_mcse = truth$reference_mcse[id],
       reference_half_width = truth$reference_half_width[id])
   }))
@@ -109,8 +111,8 @@ latent_sign_warning <- function(rows) {
       advice <- "within floating-point roundoff of zero; a larger integration budget cannot resolve this roundoff"
     } else if (row$reference_half_width >= row$solver_error + row$roundoff_guard) {
       controls <- if (row$scale == "latent") "paired_cells" else "verification_draws / verification_pairs"
-      advice <- paste0("within its integration uncertainty of zero; otherwise increase the integration budget (",
-                        controls, " in utility_model(control = ...))")
+      advice <- paste0("within its integration uncertainty of zero. If it is not zero by design, ",
+                        "increase the integration budget (", controls, " in utility_model(control = ...))")
     } else if (row$scale == "probability") {
       advice <- "within floating-point roundoff of zero; more reference simulation alone cannot resolve this roundoff"
     } else {
@@ -120,7 +122,7 @@ latent_sign_warning <- function(rows) {
   }, character(1))
   paste0("Unresolved truth sign:\n", paste(details, collapse = "\n"),
     "\nIf an effect is zero by design, its reported power is a Type I error rate and its Type S/M ",
-    "are not meaningful. Uncertified rows retain their calculated values.")
+    "are not meaningful, although they are still reported.")
 }
 
 # Collect only package helpers reachable from the sampling/estimation entry points. all.names()

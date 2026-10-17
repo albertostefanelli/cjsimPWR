@@ -237,9 +237,11 @@ power_sim <- function(levels = NULL, true_amce = NULL, units, n_tasks, groups = 
   runs <- do.call(rbind, lapply(seq_along(results), function(i) {
     data.frame(run = i, results[[i]], row.names = NULL)
   }))
+  # Index each effect's runs once instead of rescanning the run table per effect.
+  by_effect <- split(seq_len(nrow(runs)), factor(runs$effect_id, levels = truth$effect_id))
   performance <- do.call(rbind, lapply(truth$effect_id, function(id) {
-    rows <- runs[runs$effect_id == id, ]
-    summarise_runs(rows$estimate, rows$std.error, truth$true_amce[id], alpha, rows$df,
+    i <- by_effect[[id]]
+    summarise_runs(runs$estimate[i], runs$std.error[i], truth$true_amce[id], alpha, runs$df[i],
       null = truth$requested_amce[id] == 0,
       reference_mcse = truth$reference_mcse[id], reference_half_width = truth$reference_half_width[id])
   }))

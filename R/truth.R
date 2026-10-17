@@ -299,7 +299,7 @@ latent_nonrandom_beta <- function(model, g) {
       rating = all(term$sd[g, ] == 0), match = sum(term$probabilities[g, ] > 0) == 1L)
     zero_gap <- switch(term$type, dummy = FALSE, score = length(unique(term$scores[g, ])) == 1L,
       rating = fixed_gap && length(unique(term$mean[g, ])) == 1L,
-      match = term$probabilities[g, ncol(term$probabilities)] == 1)
+      match = all(term$probabilities[g, -ncol(term$probabilities)] == 0))
     zero_gap || (fixed_gap && all(term$coef_sd[g, ] == 0))
   }, logical(1)))
 }
@@ -341,7 +341,8 @@ latent_amce_reference <- function(model, g, streams, support, certified) {
     latent_check_amce_beta(support$beta)
     a <- conditional_amces(support$beta, support$reference)
     mu <- colSums(a * support$weight); mu[certified] <- 0
-    sd <- if (fixed) numeric(P) else sqrt(pmax(0, colSums(a^2 * support$weight) - mu^2))
+    # Centring first keeps a small SD that E[a^2] - E[a]^2 would lose to cancellation.
+    sd <- if (fixed) numeric(P) else sqrt(colSums(sweep(a, 2L, mu)^2 * support$weight))
     sd[zero_contrast] <- 0
     return(list(value = mu, sd = sd, mcse = numeric(P), sd_mcse = numeric(P),
       analytic = rep(FALSE, P), batches = 0L,
@@ -353,6 +354,9 @@ latent_amce_reference <- function(model, g, streams, support, certified) {
   for (b in seq_len(B)) {
     assign(".Random.seed", streams[[b]], envir = .GlobalEnv)
     beta <- latent_antithetic_nodes(model, g, control$verification_draws)
+    # Nonrandom coefficients make every node identical, so one row gives the same AMCEs. The nodes
+    # are still drawn so that the profile draws below are unchanged.
+    if (fixed) beta <- beta[1L, , drop = FALSE]
     latent_check_amce_beta(beta)
     ref <- if (is.null(ref_exact)) profile_reference(model$design$n_levels, control$verification_pairs,
       control$exact_max_pairs, control$exact_max_rows) else ref_exact
@@ -372,7 +376,8 @@ latent_amce_reference <- function(model, g, streams, support, certified) {
   list(value = mu, sd = sd, mcse = apply(means, 2L, stats::sd) / sqrt(B), sd_mcse = sd_mcse,
        analytic = rep(FALSE, P), batches = B,
        diagnostics = list(method = if (is.null(ref_exact)) "Monte Carlo respondents and profiles" else
-         "Monte Carlo respondents / exact profiles", batches = B, nodes = 2 * control$verification_draws,
+         "Monte Carlo respondents / exact profiles", batches = B,
+         nodes = if (fixed) 1 else 2 * control$verification_draws,
          pairs = ref$pairs, batch_means = means, batch_seconds = seconds))
 }
 
@@ -522,6 +527,15 @@ latent_truth_rows <- function(model, metadata, g, result, paired, family, compar
     precision_family = family, stringsAsFactors = FALSE)
 }
 
+# Only large budgets warn about runtime; smaller exploratory budgets report their size.
+latent_truth_message <- function(batches, cells) {
+  paste0("Computing paired population targets by simulation (", batches, " batches of ",
+    format(cells, big.mark = ",", scientific = FALSE),
+    " cells for each group whose targets need simulation)",
+    if (as.numeric(batches) * cells >= 2^24) "; this can take several minutes" else "",
+    ". Reuse the prepared model to avoid repeating this calculation.")
+}
+
 latent_truth <- function(model, analysis = NULL, amce = FALSE) {
   if (!is.logical(amce) || length(amce) != 1L || is.na(amce)) stop("`amce` must be a scalar logical.", call. = FALSE)
   if (is.null(analysis) && !amce) stop("request a paired analysis or AMCE truths.", call. = FALSE)
@@ -552,10 +566,8 @@ latent_truth <- function(model, analysis = NULL, amce = FALSE) {
       paired_analytic <- !is.null(analysis) && latent_matching_analysis(model, analysis, g)
       support <- if (amce || !paired_analytic) latent_finite_support(model, g, model$control) else NULL
       if (!announced && !is.null(analysis) && !paired_analytic && is.null(support) &&
-          B * model$control$paired_cells >= 1e6) {
-        message("Computing paired population targets (", B, " batches of ",
-          format(model$control$paired_cells, big.mark = ",", scientific = FALSE),
-          " cells per numerical group); this can take several minutes. Reuse the prepared model.")
+          as.numeric(B) * model$control$paired_cells >= 1e6) {
+        message(latent_truth_message(B, model$control$paired_cells))
         announced <- TRUE
       }
       rows <- list(); diagnostic <- list(streams = streams[[g]], shared_with = g)
@@ -590,7 +602,9 @@ latent_truth <- function(model, analysis = NULL, amce = FALSE) {
       a$reference_group <- model$groups[1L]
       a$true_value <- a$true_value - b$true_value; a$input <- a$input - b$input
       if (any(!is.finite(a$true_value))) latent_truth_error("nonfinite group truth difference.")
-      a$reference_mcse <- sqrt(a$reference_mcse^2 + b$reference_mcse^2)
+      # Exact power-of-two scaling: large finite MCSEs cannot overflow when squared.
+      s <- power2_scale(pmax(a$reference_mcse, b$reference_mcse))
+      a$reference_mcse <- s * sqrt((a$reference_mcse / s)^2 + (b$reference_mcse / s)^2)
       a$reference_half_width <- a$reference_half_width + b$reference_half_width
       a$solver_error <- a$solver_error + b$solver_error
       a$roundoff_guard <- a$roundoff_guard + b$roundoff_guard

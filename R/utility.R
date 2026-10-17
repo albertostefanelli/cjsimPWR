@@ -231,11 +231,12 @@ normalize_terms <- function(design, terms, groups) {
                               dimnames = list(groups, NULL))
       for (g in seq_len(nrow(shares))) {
         s <- shares[g, ]
-        if (any(s < 0 | s > 1) || sum(s) > 1 + 1e-12) {
+        # A sorted sum gives relabelled shares bit-identical canonical probabilities.
+        total <- sum(sort(s))
+        if (any(s < 0 | s > 1) || total > 1 + 1e-12) {
           latent_input_error("share", nm, attr, groups, g, lv,
                              "must lie in [0, 1] and sum to at most 1 (tolerance 1e-12)")
         }
-        total <- sum(s)
         if (total > 1) s <- s / total
         probabilities[g, ] <- c(s, if (total > 1) 0 else 1 - total)
       }
