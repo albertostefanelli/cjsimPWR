@@ -116,7 +116,7 @@ also listed in \code{attr(data, "dgp")$control}):\tabular{lrl}{
    Setting \tab Default \tab Role \cr
    \code{seed} \tab 104729 \tab Solver: calibration's own random seed, independent of the caller's RNG. \cr
    \code{maxit} \tab 100 \tab Solver: maximum solver iterations. \cr
-   \code{solver_tol} \tab 1e-6 \tab Solver: solver convergence tolerance. \cr
+   \code{solver_tol} \tab 1e-6 \tab Solver: solver convergence tolerance, or a tenth of \code{tolerance} if smaller. \cr
    \code{tolerance} \tab 0.001 \tab Solver: verification tolerance for AMCE and SD targets. \cr
    \code{exact_max_pairs} \tab 100000000 \tab Integration: at most this many ordered profile pairs for exact integration; the row and memory limits also apply. \cr
    \code{exact_max_rows} \tab 20000 \tab Integration: at most this many folded profile-difference rows for exact integration. \cr

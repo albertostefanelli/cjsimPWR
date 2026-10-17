@@ -594,7 +594,10 @@ calibrate_dgp_group <- function(design, requested, sigma, latent_sigma, control)
         c(moment$mean[mean_indices] - target[mean_indices], if (sigma > 0) sd_moments - sigma)
       }
       if (iterations >= control$maxit) stop("logit calibration did not converge within 100 total iterations.", call. = FALSE)
-      solved <- solve_amce_moments(fn, start, control$solver_tol, control$maxit - iterations)
+      # Solving to a tenth of the acceptance tolerance keeps a tight request from stalling with every
+      # retry stopping at the same point outside it; defaults are unaffected.
+      solved <- solve_amce_moments(fn, start, min(control$solver_tol, control$tolerance / 10),
+                                   control$maxit - iterations)
       iterations <- iterations + solved$iterations
       if (!solved$converged) stop("logit calibration did not converge; targets may be infeasible or near a boundary (max residual ",
                                   signif(max(abs(solved$residual)), 3), ").", call. = FALSE)

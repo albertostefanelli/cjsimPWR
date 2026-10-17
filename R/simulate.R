@@ -66,7 +66,7 @@
 #'   | --- | ---: | --- |
 #'   | `seed` | 104729 | Solver: calibration's own random seed, independent of the caller's RNG. |
 #'   | `maxit` | 100 | Solver: maximum solver iterations. |
-#'   | `solver_tol` | 1e-6 | Solver: solver convergence tolerance. |
+#'   | `solver_tol` | 1e-6 | Solver: solver convergence tolerance, or a tenth of `tolerance` if smaller. |
 #'   | `tolerance` | 0.001 | Solver: verification tolerance for AMCE and SD targets. |
 #'   | `exact_max_pairs` | 100000000 | Integration: at most this many ordered profile pairs for exact integration; the row and memory limits also apply. |
 #'   | `exact_max_rows` | 20000 | Integration: at most this many folded profile-difference rows for exact integration. |
