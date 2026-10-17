@@ -50,6 +50,18 @@
 #'   integration precision or inspecting numerical diagnostics is appropriate. See the
 #'   [paired logit guide](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/paired_logit.md).
 #'
+#'   AMCE output compares each discrete attribute level with its reference level, including attributes
+#'   with more than two levels. Score, rating and match terms can generate these effects; they do not
+#'   need to be dummy utility terms. For example, a policy AMCE compares `"right"` with `"left"`,
+#'   averaging over respondent ratings, rather than measuring a one-unit increase in `policy_rating`.
+#'   Models with non-dummy terms print a reminder when AMCE output is requested. For power to detect
+#'   score/rating/match coefficients, use `estimators = "paired", scale = "latent"`. Continuous-score
+#'   slopes or derivatives on the probability scale are not implemented as AMCE targets here.
+#'   All simulated attributes have finite levels; numeric level labels are also treated as categories.
+#'   A nonzero rating coefficient can coexist with zero AMCEs: for example, when an attribute has only
+#'   a rating term and all its levels have identical rating distributions. AMCE output then evaluates
+#'   Type I error for those level contrasts, while paired latent output evaluates coefficient power.
+#'
 #' @section Interpreting results: Bias and coverage use `true_amce`, the numerical reference for the
 #'   generated population AMCE, with its uncertainty retained. Calibrated effects match
 #'   `requested_amce` within `tolerance`, rather than necessarily equalling it. Null classification
@@ -202,13 +214,25 @@ power_sim <- function(levels = NULL, true_amce = NULL, units, n_tasks, groups = 
     }
     scale <- match.arg(scale, c("latent", "probability"))
     if (length(estimators) == 2L && scale != "probability") {
-      stop("both estimators require `scale = 'probability'`.", call. = FALSE)
+      stop("both estimators require `scale = 'probability'`: AMCEs compare discrete attribute levels ",
+           "with their reference levels on the choice-probability scale. Latent logit coefficients ",
+           "are different targets, including coefficients of continuous scores or ratings. ",
+           "Use `scale = 'probability'` to compare AMCEs, or `estimators = 'paired', ",
+           "scale = 'latent'` for coefficient power.", call. = FALSE)
     }
     if (vcov == "CR2" && scale == "probability") {
       stop("paired probability output does not support CR2.", call. = FALSE)
     }
   } else if (!is.null(paired_terms) || !is.null(scale)) {
-    stop("`paired_terms` and `scale` require the paired estimator.", call. = FALSE)
+    # Only a utility model can switch to the paired estimator, so only it is pointed there.
+    stop("`paired_terms` and `scale` require the paired estimator",
+      if (latent) "." else ", which needs a `model` from utility_model().",
+      " For AMCE-only output, omit `paired_terms` and `scale`; AMCEs already use the probability scale.",
+      if (latent) {
+        paste0(" AMCE output uses the design's discrete attribute levels and reference levels; it does ",
+             "not estimate continuous-score slopes. Use `estimators = 'paired', scale = 'latent'` for ",
+             "score/rating/match coefficient power.")
+      }, call. = FALSE)
   }
   if (latent) return(power_latent(model, units, n_tasks, estimators, paired_terms, scale,
                                 vcov, inference, alpha, sim_runs, seed, cores, keep_runs))

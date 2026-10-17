@@ -10,6 +10,10 @@
 #'   `var_2`, and so on. Level counts give the labels `"0"`, `"1"`, and so on. The first level of each
 #'   attribute is its reference level. Attributes keep the order given; the number of attributes is
 #'   determined by `levels`.
+#'   All attributes have finite, discrete levels. Numeric labels supplied in a list, such as
+#'   `list(price = c(10, 20, 30))`, are categories, not a continuously randomized attribute. Use
+#'   [term_score()] in [utility_model()] to give these levels numeric utility scores; AMCE output
+#'   still compares each level with the reference.
 #'
 #'   Every attribute needs at least two levels; level labels within an attribute must be distinct and
 #'   non-missing. Attribute names must be unique, and none may be `"group"`, `"respondent"`, `"task"`,

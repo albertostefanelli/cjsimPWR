@@ -38,6 +38,10 @@ labels of each attribute. Names give the attribute names; unnamed attributes are
 \code{var_2}, and so on. Level counts give the labels \code{"0"}, \code{"1"}, and so on. The first level of each
 attribute is its reference level. Attributes keep the order given; the number of attributes is
 determined by \code{levels}.
+All attributes have finite, discrete levels. Numeric labels supplied in a list, such as
+\code{list(price = c(10, 20, 30))}, are categories, not a continuously randomized attribute. Use
+\code{\link[=term_score]{term_score()}} in \code{\link[=utility_model]{utility_model()}} to give these levels numeric utility scores; AMCE output
+still compares each level with the reference.
 
 Every attribute needs at least two levels; level labels within an attribute must be distinct and
 non-missing. Attribute names must be unique, and none may be \code{"group"}, \code{"respondent"}, \code{"task"},
@@ -170,6 +174,18 @@ output uses the true population AMCE for both estimators. Truth rows add \code{e
 coefficient separately. A sign warning leaves Type S/M available and identifies whether increasing
 integration precision or inspecting numerical diagnostics is appropriate. See the
 \href{https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/paired_logit.md}{paired logit guide}.
+
+AMCE output compares each discrete attribute level with its reference level, including attributes
+with more than two levels. Score, rating and match terms can generate these effects; they do not
+need to be dummy utility terms. For example, a policy AMCE compares \code{"right"} with \code{"left"},
+averaging over respondent ratings, rather than measuring a one-unit increase in \code{policy_rating}.
+Models with non-dummy terms print a reminder when AMCE output is requested. For power to detect
+score/rating/match coefficients, use \verb{estimators = "paired", scale = "latent"}. Continuous-score
+slopes or derivatives on the probability scale are not implemented as AMCE targets here.
+All simulated attributes have finite levels; numeric level labels are also treated as categories.
+A nonzero rating coefficient can coexist with zero AMCEs: for example, when an attribute has only
+a rating term and all its levels have identical rating distributions. AMCE output then evaluates
+Type I error for those level contrasts, while paired latent output evaluates coefficient power.
 }
 
 \section{Interpreting results}{

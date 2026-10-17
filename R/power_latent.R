@@ -9,6 +9,15 @@ power_latent <- function(model, units, n_tasks, estimators, paired_terms, scale,
     population_gram(model, analysis)
   }
   needs_amce <- "amce" %in% estimators || identical(scale, "probability")
+  non_dummy <- vapply(model$terms, function(term) term$type != "dummy", logical(1))
+  if (needs_amce && any(non_dummy)) {
+    attributes <- unique(vapply(model$terms[non_dummy], function(term) term$attribute, character(1)))
+    message("AMCE output for attributes with score, rating or match terms (",
+      paste(attributes, collapse = ", "), ") compares discrete attribute levels with their ",
+      "reference levels, averaging over respondents. It does not report effects of a one-unit ",
+      "score/rating change or the match coefficient. For coefficient power, use ",
+      "estimators = 'paired', scale = 'latent'.")
+  }
   if (needs_amce && !any(model$truth$estimator == "amce")) {
     message("Computing AMCE population targets; reuse result$model to retain this cache.")
     added <- latent_truth(model, analysis = NULL, amce = TRUE)
