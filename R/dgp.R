@@ -77,7 +77,8 @@ effect_metadata <- function(design) {
 # Independent profile dummy columns, in design order. Used only by bounded reference calculations.
 reference_dummies <- function(codes, n_levels) {
   do.call(cbind, lapply(seq_along(n_levels), function(k) {
-    vapply(2:n_levels[k], function(l) as.numeric(codes[, k] == l), numeric(nrow(codes)))
+    matrix(vapply(2:n_levels[k], function(l) as.numeric(codes[, k] == l),
+                  numeric(nrow(codes))), nrow(codes))
   }))
 }
 
@@ -161,7 +162,7 @@ exact_profile_reference <- function(n_levels) {
     j <- columns[[k]]
     weights[, j] <- (delta[, j, drop = FALSE] + rowSums(delta[, j, drop = FALSE])) * n_levels[k] / 2 * mass
   }
-  list(delta = delta, weights = weights, exact = TRUE, pairs = as.integer(pairs))
+  list(delta = delta, weights = weights, exact = TRUE, pairs = as.integer(pairs), mass = mass)
 }
 
 # Under independent uniform randomization, AMCE = Cov(Z)^-1 E[(Z1-Z2)(P1-.5)]/2.
@@ -593,7 +594,10 @@ calibrate_dgp_group <- function(design, requested, sigma, latent_sigma, control)
         c(moment$mean[mean_indices] - target[mean_indices], if (sigma > 0) sd_moments - sigma)
       }
       if (iterations >= control$maxit) stop("logit calibration did not converge within 100 total iterations.", call. = FALSE)
-      solved <- solve_amce_moments(fn, start, control$solver_tol, control$maxit - iterations)
+      # Solving to a tenth of the acceptance tolerance keeps a tight request from stalling with every
+      # retry stopping at the same point outside it; defaults are unaffected.
+      solved <- solve_amce_moments(fn, start, min(control$solver_tol, control$tolerance / 10),
+                                   control$maxit - iterations)
       iterations <- iterations + solved$iterations
       if (!solved$converged) stop("logit calibration did not converge; targets may be infeasible or near a boundary (max residual ",
                                   signif(max(abs(solved$residual)), 3), ").", call. = FALSE)

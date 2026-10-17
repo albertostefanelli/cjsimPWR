@@ -25,7 +25,11 @@ power_sim(
   group_name = NULL,
   true_coef = NULL,
   sigma.u_k = NULL,
-  n_attributes = NULL
+  n_attributes = NULL,
+  model = NULL,
+  estimators = NULL,
+  paired_terms = NULL,
+  scale = NULL
 )
 }
 \arguments{
@@ -34,6 +38,10 @@ labels of each attribute. Names give the attribute names; unnamed attributes are
 \code{var_2}, and so on. Level counts give the labels \code{"0"}, \code{"1"}, and so on. The first level of each
 attribute is its reference level. Attributes keep the order given; the number of attributes is
 determined by \code{levels}.
+All attributes have finite, discrete levels. Numeric labels supplied in a list, such as
+\code{list(price = c(10, 20, 30))}, are categories, not a continuously randomized attribute. Use
+\code{\link[=term_score]{term_score()}} in \code{\link[=utility_model]{utility_model()}} to give these levels numeric utility scores; AMCE output
+still compares each level with the reference.
 
 Every attribute needs at least two levels; level labels within an attribute must be distinct and
 non-missing. Attribute names must be unique, and none may be \code{"group"}, \code{"respondent"}, \code{"task"},
@@ -67,7 +75,8 @@ held fixed.}
 \code{true_amce} within the calibration tolerance. The argument is retained so that later versions can
 add other choice models without changing existing calls.}
 
-\item{alpha}{Significance level for two-sided confidence intervals and tests of zero.}
+\item{alpha}{Significance level for two-sided confidence intervals and tests of zero, at least
+1e-10.}
 
 \item{vcov}{\code{"CR1"} (default): \code{sandwich::vcovCL(type = "HC1", cadjust = TRUE)}, the estimator of
 \code{cjoint::amce(cluster = TRUE)} for the unweighted specification and of Stata's \code{vce(cluster)}
@@ -106,6 +115,20 @@ independently now (see NEWS); this alias does not reproduce a 0.2.1 experiment's
 
 \item{n_attributes}{Deprecated attribute count, checked against \code{levels} when supplied. See NEWS
 for the full migration table covering every deprecated argument.}
+
+\item{model}{Optional prepared calibrated or latent \code{cj_dgp}. Its design and omitted groups are
+adopted. Omit all model-building arguments and deprecated aliases when supplying a model.}
+
+\item{estimators}{Unique nonempty subset of \code{c("amce", "paired")}. Defaults to AMCE for calibrated
+models and paired logit for models from \code{\link[=utility_model]{utility_model()}}. Paired power requires a latent model.}
+
+\item{paired_terms}{Attributes or generated score columns to include in the paired analysis.
+Custom latent truths are cached by ordered analysis in the returned \code{model$analysis_truths}.
+Defaults to all utility terms. Available only when the paired estimator is selected.}
+
+\item{scale}{Paired reporting scale: \code{"latent"} or \code{"probability"}. Paired-only power defaults to
+latent coefficients. Selecting both estimators requires probability scale and chooses it with
+a message when omitted. Paired probability reporting supports CR1 only.}
 }
 \value{
 A \code{cj_power} list with:
@@ -121,7 +144,11 @@ own truth table.
 \item \code{settings}: resolved design, sample sizes, DGP, inference, seeds, worker count and controls.
 \item \code{failures}: counts by effect, failure reason and error message; empty when no inference fails.
 \item \code{runs}: per-run estimates with \code{run} and \code{effect_id}, or NULL when \code{keep_runs = FALSE}.
-\item \code{model}: the prepared DGP, reusable with \code{\link[=simulate_experiment]{simulate_experiment()}}.
+\item \code{model}: the prepared DGP, reusable with \code{\link[=simulate_experiment]{simulate_experiment()}} and \code{\link[=power_sim]{power_sim()}}. Assign
+\code{model <- result$model} to retain newly computed AMCE and custom-analysis truth caches;
+\code{model$truth} always describes the default analysis. Latent \code{truth} and \code{performance} use
+\code{true_value} and include \code{in_analysis}: paired probability rows for omitted attributes are
+marked \code{FALSE}, while their targets remain the full population AMCEs.
 }
 }
 \description{
@@ -134,6 +161,31 @@ across worker counts and the first runs remain unchanged when \code{sim_runs} in
 has its own seed argument in \code{calibration_control}. Equal seed values can overlap calibration and
 experiment draws; the final reference uses a fresh substream. The caller's random-number state,
 including its normal-generator kind, is restored after the call.
+Latent truth calculations allocate separate reference substreams, including when their seed equals
+the experiment seed. Changing estimators, analysis terms or truth caches leaves experiments unchanged.
+}
+
+\section{Latent utility models}{
+ \code{\link[=utility_model]{utility_model()}} prepares a model from logit coefficients and
+respondent score distributions. Paired latent bias and coverage use the population target of the
+selected analysis; under misspecification this can differ from the input coefficients. Probability
+output uses the true population AMCE for both estimators. Truth rows add \code{estimator}, \code{scale},
+\code{term}, \code{true_value}, certified \code{null} and \code{sign_resolved}; \code{input} retains a matching utility
+coefficient separately. A sign warning leaves Type S/M available and identifies whether increasing
+integration precision or inspecting numerical diagnostics is appropriate. See the
+\href{https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/paired_logit.md}{paired logit guide}.
+
+AMCE output compares each discrete attribute level with its reference level, including attributes
+with more than two levels. Score, rating and match terms can generate these effects; they do not
+need to be dummy utility terms. For example, a policy AMCE compares \code{"right"} with \code{"left"},
+averaging over respondent ratings, rather than measuring a one-unit increase in \code{policy_rating}.
+Models with non-dummy terms print a reminder when AMCE output is requested. For power to detect
+score/rating/match coefficients, use \verb{estimators = "paired", scale = "latent"}. Continuous-score
+slopes or derivatives on the probability scale are not implemented as AMCE targets here.
+All simulated attributes have finite levels; numeric level labels are also treated as categories.
+A nonzero rating coefficient can coexist with zero AMCEs: for example, when an attribute has only
+a rating term and all its levels have identical rating distributions. AMCE output then evaluates
+Type I error for those level contrasts, while paired latent output evaluates coefficient power.
 }
 
 \section{Interpreting results}{

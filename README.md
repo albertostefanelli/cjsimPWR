@@ -15,12 +15,11 @@ describe the design (attributes and levels), the sample (respondents and
 tasks per respondent) and the average marginal component effects (AMCEs;
 [Hainmueller, Hopkins & Yamamoto,
 2014](https://doi.org/10.1093/pan/mpt024)) you expect. The package
-simulates the experiment many times, estimates the AMCEs each time as an
-applied study would, and reports power, Type I error for null targets,
-Type S and Type M errors (Gelman & Carlin, 2014) and coverage, each with
-its Monte Carlo standard error. Respondent heterogeneity and respondent
-subgroups can be added, and there is no limit on the number of
-attributes.
+simulates the experiment many times, estimates the AMCEs each time, and
+reports power, Type I error for null targets, Type S and Type M errors
+(Gelman & Carlin, 2014) and coverage, each with its Monte Carlo standard
+error. Respondent heterogeneity and respondent subgroups can be added,
+and there is no limit on the number of attributes.
 
 | **WARNING** |
 |:--:|
@@ -69,8 +68,10 @@ the true AMCE on average (1.08 means 8 percent too large). Both are
 small when power is high but grow quickly when it is low; see the
 [error-rates
 guide](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/error_rates.md#type-s-and-type-m-errors).
-All rates and their MCSEs are computed over `n_valid`, the runs with
-usable inference — inspect `$failures` for the rest. Zero targets report
+Power, Type I error and coverage, and their MCSEs, are computed over
+`n_valid`, the runs with usable inference — inspect `$failures` for the
+rest. Type S and Type M, and their MCSEs, are computed over the
+significant runs among them, `n_sig`. Zero targets report
 `Type I error`, the false-positive rate, instead of power.
 
 ## Heterogeneous preferences
@@ -176,6 +177,56 @@ precision before deciding between neighbouring candidates. This compares
 the candidates shown; it does not search for, or guarantee, the minimum
 sample size that reaches the target.
 
+## A new approach: paired logit for trade-off designs
+
+Some conjoint experiments are built to measure trade-offs rather than
+the average effect of each attribute. Graham and Svolik (2020) is a
+well-known example: how much policy proximity will a voter give up to
+avoid an undemocratic candidate? To answer this, the study measures how
+close each candidate is to the respondent on policy and analyses both
+candidates in a pair at once, because a voter weighs one candidate
+against the other.
+
+To plan such a study, describe how respondents value the features with
+`utility_model()` instead of supplying target AMCEs. `term_rating()`
+gives a profile the respondent’s own rating of its level, `term_match()`
+adds a bonus when the profile matches the respondent’s group (for
+example, their party), and `term_dummy()` gives a fixed effect to a
+level such as a democratic violation. Then ask `power_sim()` for both
+analyses, so you can compare the paired logit with AMCE regression on
+the same simulated experiments:
+
+``` r
+design <- conjoint_design(list(policy    = c("left", "centre", "right"),
+                               party     = c("A", "B", "C"),
+                               democracy = c("respects", "violates")))
+model <- utility_model(design, list(
+  term_rating("policy", mean = c(6, 5, 4), sd = c(2, 1.5, 2), coef = 0.3),
+  term_match("party", share = c(0.4, 0.3, 0.2), coef = 0.9),
+  term_dummy("democracy", coef = -0.8)))
+result <- power_sim(model = model, estimators = c("amce", "paired"),
+                    units = 500, n_tasks = 4, sim_runs = 200, seed = 1)
+result$performance
+```
+
+Here a democratic violation costs a candidate 0.8 on the logit scale, a
+co-partisan gains 0.9, and each point of the respondent’s policy rating
+adds 0.3 (40% of respondents identify with party A, 30% with B, 20% with
+C, and 10% with none). Because AMCE regression is included, the output
+compares the two analyses on the AMCEs these weights imply, changes in
+choice probability between discrete levels, not on the weights
+themselves. For example, the policy AMCEs compare centre or right with
+left, averaging over respondents and their ratings, rather than
+measuring a one-point rating increase. `power_sim()` prints a reminder
+of this for models with score, rating or match terms. For the power to
+detect each weight, run the paired logit alone, with
+`estimators = "paired"`. In this example, a voter would accept a
+violation in exchange for about 0.8 / 0.3, or roughly 2.7 points of
+policy rating. The package does not yet report the power for such a
+ratio itself, and when respondents differ in their weights a fitted
+ratio need not equal the average voter’s trade-off. Use at least 1,000
+runs for a final analysis.
+
 ## Further guides
 
 | To… | See |
@@ -185,9 +236,15 @@ sample size that reaches the target.
 | Interpret power, Type I error, Type S and Type M, or check a null | [error rates](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/error_rates.md) |
 | Investigate calibration diagnostics or tune precision | [calibration](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/calibration.md) |
 | Compare with closed-form power formulas (cjpowR) | [closed-form comparison](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/closed_form.md) |
+| Plan a trade-off design with the paired logit | [paired logit](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/paired_logit.md) |
 | Compare with DeclareDesign | [DeclareDesign](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/declaredesign.md) |
 
 ## References
+
+Graham, M. H., & Svolik, M. W. (2020). Democracy in America?
+Partisanship, polarization, and the robustness of support for democracy
+in the United States. *American Political Science Review*, 114(2),
+392–409. <https://doi.org/10.1017/S0003055420000052>
 
 Gelman, A., & Carlin, J. (2014). Beyond power calculations: Assessing
 Type S (sign) and Type M (magnitude) errors. *Perspectives on

@@ -37,7 +37,8 @@ full CR1 identity and the \href{https://github.com/albertostefanelli/cjsimPWR/bl
 NULL chooses normal for CR1 and Satterthwaite for CR2. The G-1 approximation can be poor for
 small subgroups, even if the joint fit has many respondents.}
 
-\item{alpha}{Significance level for two-sided confidence intervals and tests of zero.}
+\item{alpha}{Significance level for two-sided confidence intervals and tests of zero, at least
+1e-10.}
 }
 \value{
 A data frame in supplied group, attribute and level order, with AMCE rows preceding
@@ -57,9 +58,11 @@ groups' counts for a difference — not an effective degrees of freedom), \code{
 Non-estimable effects retain a row with NA estimates and inference; other estimable effects keep
 their estimates even when this one's inference fails. Each group involved in an effect needs at
 least two respondents for inference. Covariance is attached as attribute \code{vcov}, in output row
-order; rows/columns without valid inference are NA. Perfectly fitted subgroups have
-\code{invalid_variance} for their AMCEs; a difference can retain inference when the other group
-supplies positive variance. No multiplicity adjustment is applied.
+order; rows/columns without valid inference are NA. A subgroup whose outcomes the attributes
+reproduce exactly, or so nearly that the remaining variation is lost in rounding error, has
+\code{invalid_variance} for its AMCEs. A difference with such a group keeps inference from the other
+group's variance only when the first group's computed variance is negligible beside it, as for an
+exact fit; otherwise the difference fails too. No multiplicity adjustment is applied.
 
 \code{failure_reason} (\code{status == "failed"}) is one of:
 \itemize{
@@ -70,7 +73,8 @@ missing level combinations.
 \item \code{covariance_failure}: the covariance calculation raised an error, recorded in the
 \code{"covariance_error"} attribute.
 \item \code{invalid_variance}: the estimated variance is non-finite or non-positive, typically from a
-perfectly fitted subgroup.
+perfectly fitted subgroup, or the effect depends on a nearly perfectly fitted subgroup whose
+variance is lost in rounding error.
 \item \code{invalid_df}: the inference method returned non-finite or non-positive degrees of freedom.
 }
 
