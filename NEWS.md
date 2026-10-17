@@ -1,5 +1,9 @@
-# cjsimPWR 0.3.1
+# cjsimPWR 0.4.0
 
+* `power_sim()` reminds users that AMCE output for models with score, rating or match terms compares
+  discrete attribute levels with their reference levels, not one-unit score or rating changes. Errors
+  for invalid estimator/scale combinations point to paired latent output for coefficient power. Valid
+  AMCE comparisons remain available for these models.
 * Symmetric group differences are certified as exact nulls from the model inputs, including level
   relabellings and sign reversals on other attributes. They report Type I error instead of power.
 * Custom paired analyses cache their truths in the returned model. Numerical truth construction can
@@ -20,6 +24,12 @@
 * Latent truths use fixed integration budgets, separate reference substreams, certified nulls and
   explicit Monte Carlo precision. Type S/M remain available when a target sign is unresolved, with
   a diagnostic warning. Failed numerical fits remain failures, never nonsignificant results.
+* `alpha` must be at least 1e-10. Long numeric respondent identifiers are compared exactly. Subgroup
+  AMCE estimation is robust to outcomes of very different sizes, and a difference involving a nearly
+  perfectly fitted subgroup fails rather than understating its standard error. Coverage and Monte
+  Carlo standard errors stay correct at extreme magnitudes. Calibration with a `tolerance` below 1e-5
+  now converges, fixed-coefficient utility models compute their AMCE targets much faster, and analytic
+  Type M is 1 when all estimates are equal.
 * Existing calibrated calls, returned objects and experiment streams are preserved. No new package
   dependency is required. See `docs/paired_logit.md` for assumptions, scales and examples.
 
