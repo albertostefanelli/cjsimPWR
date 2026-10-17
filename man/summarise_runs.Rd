@@ -22,7 +22,7 @@ summarise_runs(
 
 \item{truth}{numeric; the generated population AMCE, or its independent numerical reference estimate.}
 
-\item{alpha}{numeric; significance level of the two-sided test. Default 0.05.}
+\item{alpha}{numeric; significance level of the two-sided test, at least 1e-10. Default 0.05.}
 
 \item{df}{numeric; degrees of freedom for t critical values, either one value or one per run. \code{Inf}
 (the default) uses normal critical values. \code{NA} marks unavailable inference in a failed run.}

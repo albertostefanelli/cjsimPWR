@@ -21,7 +21,8 @@
 #' @param inference `"normal"`, `"t"` (G-1 df from the joint fit), or `"Satterthwaite"` (CR2 only).
 #'   NULL chooses normal for CR1 and Satterthwaite for CR2. The G-1 approximation can be poor for
 #'   small subgroups, even if the joint fit has many respondents.
-#' @param alpha Significance level for two-sided confidence intervals and tests of zero.
+#' @param alpha Significance level for two-sided confidence intervals and tests of zero, at least
+#'   1e-10.
 #'
 #' @details CR1 is the cluster-robust covariance times `G/(G-1) * (n-1)/(n-k)`, where `G` is all
 #'   respondents in the joint fit, `n` is profile rows and `k` is the fitted rank.
@@ -41,9 +42,11 @@
 #'   Non-estimable effects retain a row with NA estimates and inference; other estimable effects keep
 #'   their estimates even when this one's inference fails. Each group involved in an effect needs at
 #'   least two respondents for inference. Covariance is attached as attribute `vcov`, in output row
-#'   order; rows/columns without valid inference are NA. Perfectly fitted subgroups have
-#'   `invalid_variance` for their AMCEs; a difference can retain inference when the other group
-#'   supplies positive variance. No multiplicity adjustment is applied.
+#'   order; rows/columns without valid inference are NA. A subgroup whose outcomes the attributes
+#'   reproduce exactly, or so nearly that the remaining variation is lost in rounding error, has
+#'   `invalid_variance` for its AMCEs. A difference with such a group keeps inference from the other
+#'   group's variance only when the first group's computed variance is negligible beside it, as for an
+#'   exact fit; otherwise the difference fails too. No multiplicity adjustment is applied.
 #'
 #'   `failure_reason` (`status == "failed"`) is one of:
 #'   * `non_estimable`: the effect is aliased with the fitted design; inspect the design and data for
@@ -53,7 +56,8 @@
 #'   * `covariance_failure`: the covariance calculation raised an error, recorded in the
 #'     `"covariance_error"` attribute.
 #'   * `invalid_variance`: the estimated variance is non-finite or non-positive, typically from a
-#'     perfectly fitted subgroup.
+#'     perfectly fitted subgroup, or the effect depends on a nearly perfectly fitted subgroup whose
+#'     variance is lost in rounding error.
 #'   * `invalid_df`: the inference method returned non-finite or non-positive degrees of freedom.
 #'
 #'   `run_error`, a whole-run sampling or fitting failure, is added by [power_sim()], not by this
@@ -84,12 +88,24 @@ estimate_amce <- function(data, design, groups = NULL, vcov = c("CR1", "CR2"),
   out <- input$table
   n <- nrow(X)
   G <- length(unique(data$respondent))
-  fit <- stats::lm.fit(X, data$y)
+  # Each group has its own coefficients and respondents. Shifting a group's outcomes by their minimum
+  # (absorbed by its intercept) and dividing them by a power of two near their largest value therefore
+  # changes no AMCE or covariance once Cs multiplies its coefficients back. Otherwise a large outcome
+  # offset or effect in one group would swamp the others' residuals in the joint fit. Binary outcomes
+  # are unchanged.
+  # Convert integer outcomes before centering to avoid 32-bit subtraction overflow.
+  y <- as.numeric(data$y)
+  y <- y - stats::ave(y, input$group_index, FUN = min)
+  group_scale <- power2_scale(vapply(seq_len(max(input$coefficient_group)),
+                                     function(g) max(0, y[input$group_index == g]), numeric(1)))
+  y <- y / group_scale[input$group_index]
+  fit <- stats::lm.fit(X, y)
   k <- fit$rank
   keep <- fit$qr$pivot[seq_len(k)]
   Xr <- X[, keep, drop = FALSE]
-  reduced <- stats::lm.fit(Xr, data$y)
+  reduced <- stats::lm.fit(Xr, y)
   Cr <- C[, keep, drop = FALSE]
+  Cs <- Cr * rep(group_scale[input$coefficient_group[keep]], each = nrow(Cr))
 
   # X = Xr A. A requested functional C beta is estimable exactly when C = Cr A.
   # This retains identified effects without treating arbitrary aliased coefficients as zero.
@@ -98,7 +114,7 @@ estimate_amce <- function(data, design, groups = NULL, vcov = c("CR1", "CR2"),
     A <- qr.coef(reduced$qr, X)
     estimable <- apply(abs(C - Cr %*% A), 1L, max) < 1e-8
   }
-  out$estimate <- as.numeric(Cr %*% reduced$coefficients)
+  out$estimate <- as.numeric(Cs %*% reduced$coefficients)
   out$estimate[!estimable] <- NA_real_
   for (nm in c("std.error", "df", "statistic", "p.value", "conf.low", "conf.high")) {
     out[[nm]] <- NA_real_
@@ -117,7 +133,7 @@ estimate_amce <- function(data, design, groups = NULL, vcov = c("CR1", "CR2"),
   if (length(eligible)) {
     # Safe internal column names avoid all formula/label parsing. A genuine lm object on the full-rank
     # reduced design supplies what sandwich and clubSandwich need; its coefficients are in Xr order.
-    model_data <- data.frame(y = data$y, Xr, check.names = FALSE)
+    model_data <- data.frame(y = y, Xr, check.names = FALSE)
     if (vcov == "CR1") {
       # G/(G - 1) from cadjust and (n - 1)/(n - k) from HC1: the CR1S estimator, as in cjoint and Stata.
       cov_result <- tryCatch({
@@ -133,7 +149,8 @@ estimate_amce <- function(data, design, groups = NULL, vcov = c("CR1", "CR2"),
     } else {
       cov_result <- tryCatch({
         model <- stats::lm(y ~ . - 1, data = model_data, x = TRUE, y = TRUE)
-        V <- clubSandwich::vcovCR(model, cluster = data$respondent, type = "CR2")
+        V <- clubSandwich::vcovCR(model, cluster = input$cluster, type = "CR2")
+        # Only the degrees of freedom are used; they depend on the design and contrasts, not on y.
         tests <- clubSandwich::linear_contrast(model, vcov = V,
           contrasts = Cr[eligible, , drop = FALSE], level = 1 - alpha,
           test = switch(inference, normal = "z", t = "naive-t", Satterthwaite = "Satterthwaite"))
@@ -145,20 +162,31 @@ estimate_amce <- function(data, design, groups = NULL, vcov = c("CR1", "CR2"),
       attr(out, "covariance_error") <- cov_result$error
     } else {
       V <- cov_result$V
-      # A perfectly fitted subgroup can leave roundoff covariance even when other groups are noisy.
-      # Zero its coefficient block before forming contrasts; unaffected groups retain their variance.
+      # A perfectly fitted subgroup leaves only roundoff covariance, which must not pass for variance.
+      # Rescaled outcomes lie in [0, 2), so the joint fit's roundoff stays near machine precision in
+      # every group's own units. A group whose residuals are within 100 times machine precision of its
+      # outcomes, or of the largest outcome for a constant group, is fitted perfectly or nearly so. Its
+      # block is zeroed, so its own AMCEs fail; unaffected groups retain their variance.
+      floor <- max(y)^2
+      near <- logical(k)
       for (g in unique(input$group_index)) {
         rows <- input$group_index == g
         if (sum(reduced$residuals[rows]^2) <=
-            (100 * .Machine$double.eps)^2 * max(1, sum(data$y[rows]^2))) {
-          columns <- input$coefficient_group[keep] == g
-          V[columns, ] <- 0
-          V[, columns] <- 0
+            (100 * .Machine$double.eps)^2 * max(floor, sum(y[rows]^2))) {
+          near[input$coefficient_group[keep] == g] <- TRUE
         }
       }
-      Vout <- Cr %*% V %*% t(Cr)
+      # Roundoff cannot tell an exact fit (zero variance) from a near one (small real variance). A
+      # difference keeps inference from the other group only when the near group's computed variance
+      # is negligible next to it, as for an exact fit; otherwise the difference fails too.
+      Cn <- Cs[, near, drop = FALSE]
+      unresolved <- rowSums((Cn %*% V[near, near, drop = FALSE]) * Cn)[eligible]
+      V[near, ] <- 0
+      V[, near] <- 0
+      Vout <- Cs %*% V %*% t(Cs)
       variance <- diag(Vout)[eligible]
-      good_var <- is.finite(variance) & variance > 0
+      good_var <- is.finite(variance) & variance > 0 &
+        is.finite(unresolved) & unresolved <= 1e-8 * variance
       good_df <- !is.na(cov_result$df) & cov_result$df > 0
       out$failure_reason[eligible[!good_var]] <- "invalid_variance"
       out$failure_reason[eligible[good_var & !good_df]] <- "invalid_df"
@@ -190,8 +218,9 @@ check_inference <- function(vcov, inference, alpha) {
   if (vcov == "CR2" && !requireNamespace("clubSandwich", quietly = TRUE)) {
     stop("`vcov = \"CR2\"` requires the suggested package 'clubSandwich'.", call. = FALSE)
   }
-  if (!is.numeric(alpha) || length(alpha) != 1 || !is.finite(alpha) || alpha <= 0 || alpha >= 1) {
-    stop("`alpha` must be a single number between 0 and 1.", call. = FALSE)
+  # Below 1e-10, 1 - alpha / 2 loses the precision its critical value needs.
+  if (!is.numeric(alpha) || length(alpha) != 1 || !is.finite(alpha) || alpha < 1e-10 || alpha >= 1) {
+    stop("`alpha` must be a single number between 0 and 1, and at least 1e-10.", call. = FALSE)
   }
   inference
 }
@@ -243,7 +272,9 @@ amce_model_data <- function(data, design, groups) {
     if (anyNA(values) || any(!values %in% lv)) {
       stop("attribute '", a, "' contains missing values or levels outside the design.", call. = FALSE)
     }
-    vapply(lv[-1], function(l) as.numeric(values == l), numeric(nrow(data)))
+    # vapply() drops a one-row block to a vector; keep the profile-by-level matrix.
+    matrix(vapply(lv[-1], function(l) as.numeric(values == l), numeric(nrow(data))),
+           nrow(data), dimnames = list(NULL, lv[-1]))
   }))
   B <- cbind(1, D)
   p <- nrow(meta)
@@ -272,6 +303,9 @@ amce_model_data <- function(data, design, groups) {
     min_clusters <- c(min_clusters, rep(pmin(clusters[-1], clusters[1]), each = p))
   }
   rownames(table) <- NULL
+  # Integer cluster codes compare identifiers by equality. Covariance packages convert clusters to
+  # text, and as.character() can give distinct 16-digit numeric identifiers the same label.
   list(X = X, C = C, table = table, min_clusters = min_clusters,
-       group_index = group_index, coefficient_group = rep(seq_len(ng), each = p + 1L))
+       group_index = group_index, coefficient_group = rep(seq_len(ng), each = p + 1L),
+       cluster = match(id, unique(id)))
 }

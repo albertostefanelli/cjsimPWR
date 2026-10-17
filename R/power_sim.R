@@ -315,7 +315,7 @@ power_worker <- function(model, units, n_tasks, vcov, inference, alpha) {
   env <- new.env(parent = baseenv())
   functions <- c("simulate_experiment", "sample_tasks", "draw_profiles", "profile_scores",
                  "check_groups", "per_group", "estimate_amce", "amce_model_data", "check_inference",
-                 "match_effect_rows")
+                 "match_effect_rows", "power2_scale")
   for (nm in functions) {
     fn <- get(nm, envir = environment(power_worker))
     environment(fn) <- env

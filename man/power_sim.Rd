@@ -71,7 +71,8 @@ held fixed.}
 \code{true_amce} within the calibration tolerance. The argument is retained so that later versions can
 add other choice models without changing existing calls.}
 
-\item{alpha}{Significance level for two-sided confidence intervals and tests of zero.}
+\item{alpha}{Significance level for two-sided confidence intervals and tests of zero, at least
+1e-10.}
 
 \item{vcov}{\code{"CR1"} (default): \code{sandwich::vcovCL(type = "HC1", cadjust = TRUE)}, the estimator of
 \code{cjoint::amce(cluster = TRUE)} for the unweighted specification and of Stata's \code{vce(cluster)}

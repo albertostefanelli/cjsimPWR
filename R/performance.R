@@ -7,7 +7,7 @@
 #' @param estimate numeric vector; the estimated AMCE in each run.
 #' @param std.error numeric vector; the standard error of each estimate.
 #' @param truth numeric; the generated population AMCE, or its independent numerical reference estimate.
-#' @param alpha numeric; significance level of the two-sided test. Default 0.05.
+#' @param alpha numeric; significance level of the two-sided test, at least 1e-10. Default 0.05.
 #' @param df numeric; degrees of freedom for t critical values, either one value or one per run. `Inf`
 #'   (the default) uses normal critical values. `NA` marks unavailable inference in a failed run.
 #' @param null logical; classify the target as a null? Defaults to `truth == 0`. Set TRUE for a
@@ -127,8 +127,8 @@ summarise_runs <- function(estimate, std.error, truth, alpha = 0.05, df = Inf,
       stop("`", nm, "` must be a single non-negative finite number.", call. = FALSE)
     }
   }
-  if (!is.numeric(alpha) || length(alpha) != 1 || !isTRUE(alpha > 0 && alpha < 1)) {
-    stop("`alpha` must be a single number between 0 and 1.", call. = FALSE)
+  if (!is.numeric(alpha) || length(alpha) != 1 || !isTRUE(alpha >= 1e-10 && alpha < 1)) {
+    stop("`alpha` must be a single number between 0 and 1, and at least 1e-10.", call. = FALSE)
   }
   if (!is.numeric(df) || !length(df) %in% c(1, length(estimate)) ||
       any(df <= 0, na.rm = TRUE)) {
@@ -151,10 +151,26 @@ summarise_runs <- function(estimate, std.error, truth, alpha = 0.05, df = Inf,
   ratio <- if (undefined_sm) numeric() else abs(est[sig]) / abs(truth)
   type_s <- if (undefined_sm || n_sig == 0) NA_real_ else mean(sign(est[sig]) != sign(truth))
   type_m <- if (undefined_sm || n_sig == 0) NA_real_ else mean(ratio)
-  coverage <- proportion(abs(est - truth) <= crit * se)
+  # Each run is compared in units of an exact power of two near its own largest value. Ordinary
+  # decisions are unchanged, values near the largest finite number cannot overflow to Inf <= Inf, and
+  # runs of very different sizes cannot underflow one another. The reference half-width enters only
+  # the sensitivity bounds.
+  run_scale <- power2_scale(pmax(abs(est), abs(truth), se))
+  coverage <- proportion(abs(est / run_scale - truth / run_scale) <= crit * (se / run_scale))
+  ref_scale <- power2_scale(pmax(abs(est), abs(truth), se, reference_half_width))
+  distance <- abs(est / ref_scale - truth / ref_scale)
+  half_width <- crit * (se / ref_scale)
+  reference <- reference_half_width / ref_scale
 
-  emp_se <- if (n > 1) stats::sd(est) else NA_real_
-  model_se <- if (n > 0) sqrt(mean(se^2)) else NA_real_
+  # Exact power-of-two scaling keeps ordinary results bit-identical while extreme units cannot
+  # overflow or underflow the squared and fourth-power moments below.
+  est_scale <- power2_scale(if (n > 0) max(abs(est)) else 0)
+  se_scale <- power2_scale(if (n > 0) max(se) else 0)
+  emp_se <- if (n > 1) est_scale * stats::sd(est / est_scale) else NA_real_
+  model_se_scaled <- if (n > 0) sqrt(mean((se / se_scale)^2)) else NA_real_
+  model_se <- se_scale * model_se_scaled
+  bias_scale <- power2_scale(max(emp_se, reference_mcse))
+  ratio_scale <- power2_scale(if (length(ratio)) max(ratio) else 0)
   analytic <- closed_form_measures(truth, emp_se, alpha)
 
   out <- data.frame(
@@ -165,18 +181,22 @@ summarise_runs <- function(estimate, std.error, truth, alpha = 0.05, df = Inf,
     type_s = type_s,
     type_s_mcse = proportion_mcse(type_s, n_sig),
     type_m = type_m,
-    type_m_mcse = if (is.na(type_m) || n_sig < 2) NA_real_ else stats::sd(ratio) / sqrt(n_sig),
+    type_m_mcse = if (is.na(type_m) || n_sig < 2) NA_real_ else {
+      ratio_scale * stats::sd(ratio / ratio_scale) / sqrt(n_sig)
+    },
     coverage = coverage,
     coverage_mcse = proportion_mcse(coverage, n),
-    coverage_reference_lower = proportion(abs(est - truth) + reference_half_width <= crit * se),
-    coverage_reference_upper = proportion(pmax(0, abs(est - truth) - reference_half_width) <= crit * se),
+    coverage_reference_lower = proportion(distance + reference <= half_width),
+    coverage_reference_upper = proportion(pmax(0, distance - reference) <= half_width),
     mean_estimate = if (n > 0) mean(est) else NA_real_,
     bias = if (n > 0) mean(est) - truth else NA_real_,
-    bias_mcse = sqrt(emp_se^2 / n + reference_mcse^2),
+    bias_mcse = bias_scale * sqrt((emp_se / bias_scale)^2 / n + (reference_mcse / bias_scale)^2),
     emp_se = emp_se,
     emp_se_mcse = if (n > 1) emp_se / sqrt(2 * (n - 1)) else NA_real_,
     model_se = model_se,
-    model_se_mcse = if (n > 1) sqrt(stats::var(se^2) / (4 * n * model_se^2)) else NA_real_,
+    model_se_mcse = if (n > 1) {
+      se_scale * sqrt(stats::var((se / se_scale)^2) / (4 * n * model_se_scaled^2))
+    } else NA_real_,
     analytic_power = if (null) NA_real_ else analytic$power,
     analytic_type_s = if (undefined_sm) NA_real_ else analytic$type_s,
     analytic_type_m = if (undefined_sm) NA_real_ else analytic$type_m,
@@ -187,6 +207,14 @@ summarise_runs <- function(estimate, std.error, truth, alpha = 0.05, df = Inf,
   )
   class(out) <- c("cj_performance", class(out))
   out
+}
+
+# Largest power of two not above each x, capped at the largest finite one (2^1023), or 1 for a zero,
+# missing or nonfinite x. Dividing by it is exact.
+power2_scale <- function(x) {
+  scale <- 2^pmin(floor(log2(x)), 1023)
+  scale[!is.finite(scale) | scale == 0] <- 1
+  scale
 }
 
 # Share of TRUE values; NA when there are none.
