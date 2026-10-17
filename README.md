@@ -177,6 +177,7 @@ precision before deciding between neighbouring candidates. This compares
 the candidates shown; it does not search for, or guarantee, the minimum
 sample size that reaches the target.
 
+<!--
 ## A new approach: paired logit for trade-off designs
 
 Some conjoint experiments are built to measure trade-offs rather than
@@ -226,6 +227,8 @@ policy rating. The package does not yet report the power for such a
 ratio itself, and when respondents differ in their weights a fitted
 ratio need not equal the average voter’s trade-off. Use at least 1,000
 runs for a final analysis.
+
+-->
 
 ## Further guides
 
