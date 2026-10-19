@@ -16,14 +16,19 @@ estimate_paired(
 )
 }
 \arguments{
-\item{data}{Profile rows with binary complementary outcomes, respondent and task identifiers,
-exactly one profile 1 and 2 per task, and the design's attribute columns.}
+\item{data}{A nonempty data frame with unique column names, numeric binary \code{y}, non-missing
+\code{respondent}, \code{task} and \code{profile} identifiers, and the design's attribute columns. Each
+respondent-task must have exactly one profile 1 and one profile 2, with one outcome 1 and the
+other 0. Each attribute column must be a vector with one value per profile, using only levels
+declared in \code{design}. Missing outcomes or attribute values are rejected, never omitted.}
 
-\item{design}{A design returned by \code{\link[=conjoint_design]{conjoint_design()}}.}
+\item{design}{A \code{cj_design} from \code{\link[=conjoint_design]{conjoint_design()}} declaring the full intended attribute levels.
+The first level of each attribute is the reference even when absent from the observed sample.}
 
 \item{terms}{Nonempty unique character vector. Attributes select their non-reference dummies;
-other names select finite numeric score columns. NULL uses an attached latent model's terms,
-or all design attributes.}
+other names select finite numeric score columns, which must be present in \code{data}. Select external
+score or rating columns explicitly. NULL uses an attached latent model's terms, or all design
+attributes.}
 
 \item{groups}{Group names in desired order, as in \code{\link[=estimate_amce]{estimate_amce()}}. If omitted, factor group
 levels or the first appearance of character groups determines the order and reference group.
@@ -55,6 +60,10 @@ includes uncertainty from the fitted logit and the sampled profiles/respondents.
 Probability output has an AMCE interpretation under independent uniform assignment;
 otherwise it is the stated regression projection. Probability CR1 includes both sources of
 uncertainty. No intercept is added to the paired logit. Labels are never interpreted as formulas.
+
+Supply both \code{data} and \code{design} explicitly; the design is not inferred from observed levels.
+Invalid inputs stop with an error. Non-estimable effects, nonconvergent fits or failed inference
+instead retain result rows with \code{status = "failed"} and a \code{failure_reason}.
 
 For repeated fits in parallel, use PSOCK workers (\code{parallel::makePSOCKcluster()}), as
 \code{\link[=power_sim]{power_sim()}} does. With a threaded BLAS such as OpenMP OpenBLAS, forked workers

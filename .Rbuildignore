@@ -5,6 +5,7 @@
 ^private$
 ^docs$
 ^\.github$
+^\.claude$
 ^LICENSE\.md$
 \.DS_Store$
 ^cran-comments\.md$

@@ -230,6 +230,30 @@ runs for a final analysis.
 
 -->
 
+## Estimating from existing data
+
+`estimate_amce(data, design)` expects a nonempty data frame with one row per
+profile and uniquely named columns for finite numeric `y`, non-missing
+`respondent`, and every design attribute. Pass a `cj_design` that declares
+the full intended attribute levels and references; reuse it when fitting
+so the comparisons stay explicit even if a level is absent from the
+sample. Missing outcomes or attribute values, undeclared values, and
+malformed attribute columns stop with an error. With `groups`, add a
+non-missing `group` column.
+
+`estimate_paired(data, design)` uses the same data frame and design
+requirements, plus `task` and `profile` identifiers. Each respondent-task
+must contain profiles 1 and 2 with complementary binary `y` values; check
+outcome coding and profile pairing if this condition fails. For external
+score or rating analyses, include finite numeric profile-level columns
+and select them explicitly with `terms =`. A missing selected score
+column and a present but invalid score column are distinct input errors.
+Invalid input data stop estimation, while non-estimable effects,
+nonconvergent fits, or failed inference retain result rows with their
+failure status. See the [paired logit
+guide](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/paired_logit.md)
+for examples.
+
 ## Further guides
 
 | To… | See |

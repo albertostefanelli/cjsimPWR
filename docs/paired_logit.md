@@ -139,6 +139,23 @@ candidate of their own party over a `D+` candidate of party B. The simulation ad
 each rating, score or match term (`policy_rating`, `party_match`). Real data need such columns before
 the paired logit can use ratings or matches.
 
+For either estimator, pass a `cj_design` that declares the full intended attribute levels and
+references, and reuse it when fitting so the comparisons remain explicit even if a level is absent
+from the sample. The data must be a nonempty data frame with one row per profile and unique column
+names. AMCE data need finite numeric `y`, non-missing `respondent`, and one value per profile for
+each design attribute; add a non-missing `group` column for subgroup estimation. Missing outcomes
+or attributes, undeclared values, and malformed attribute columns stop with an error. Paired data
+also need `task` and `profile`, with exactly one profile 1 and one profile 2 per respondent-task and
+complementary binary outcomes. If this check fails, inspect outcome coding and profile pairing.
+Invalid data stop with an error. Non-estimable effects, nonconvergent fits, or failed inference
+instead retain result rows with a failure status.
+
+For external scores or ratings, include one finite numeric value per profile and select their
+columns by name with `terms =`. For example, to fit all terms in this model, use
+`estimate_paired(data, design, terms = c("policy_rating", "party_match", "democracy"))`. A missing
+selected score column and a present but invalid score column are distinct input errors; add or repair
+the column before fitting.
+
 `estimate_paired()` fits the paired logit. By default it uses all the model's terms and reports their
 coefficients:
 

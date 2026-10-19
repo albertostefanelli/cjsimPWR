@@ -14,12 +14,14 @@ estimate_amce(
 )
 }
 \arguments{
-\item{data}{Profile rows with finite numeric \code{y}, a non-missing \code{respondent} identifier, the
-design's attribute columns, and \code{group} when estimating subgroup effects. A respondent must
-belong to only one group. Missing outcomes or attribute values are rejected, never omitted.}
+\item{data}{A nonempty data frame with uniquely named columns for finite numeric \code{y}, non-missing
+\code{respondent} identifiers and the design's attributes. Each attribute column must be a vector
+with one value per profile, using only levels declared in \code{design}. Missing outcomes or
+attribute values are rejected, never omitted. Add \code{group} for subgroup estimation; each
+respondent must belong to only one group.}
 
-\item{design}{A \code{cj_design} from \code{conjoint_design()}. Its first level is always the reference,
-even when that level is absent from the sample.}
+\item{design}{A \code{cj_design} from \code{\link[=conjoint_design]{conjoint_design()}} declaring the full intended attribute levels.
+The first level of each attribute is the reference even when absent from the observed sample.}
 
 \item{groups}{Group names in the desired order. Each subsequent group is compared with the first.
 If NULL, use the group factor's levels, or first appearance for character groups; an absent or
@@ -88,6 +90,10 @@ and reports each group's AMCEs together with subsequent-group-minus-first-group 
 \details{
 CR1 is the cluster-robust covariance times \code{G/(G-1) * (n-1)/(n-k)}, where \code{G} is all
 respondents in the joint fit, \code{n} is profile rows and \code{k} is the fitted rank.
+
+Supply both \code{data} and \code{design} explicitly; the design is not inferred from observed levels.
+Invalid inputs stop with an error. Non-estimable effects or failed inference instead retain
+result rows with \code{status = "failed"} and a \code{failure_reason}, as described below.
 }
 \examples{
 design <- conjoint_design(c(2, 3))

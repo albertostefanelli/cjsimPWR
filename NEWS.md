@@ -1,5 +1,8 @@
 # cjsimPWR 0.4.0
 
+* `estimate_amce()` and `estimate_paired()` now explain omitted `design` or `data` arguments and name
+  missing or duplicate columns, malformed attribute columns, and missing or invalid selected paired
+  score columns. Paired outcome errors suggest checking outcome coding and profile pairing.
 * `power_sim()` reminds users that AMCE output for models with score, rating or match terms compares
   discrete attribute levels with their reference levels, not one-unit score or rating changes. Errors
   for invalid estimator/scale combinations point to paired latent output for coefficient power. Valid

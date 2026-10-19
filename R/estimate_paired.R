@@ -163,8 +163,10 @@ paired_analysis <- function(design, terms, model = NULL) {
 
 paired_model_data <- function(data, design, terms, groups) {
   amce <- amce_model_data(data, design, groups)
-  if (!all(c("task", "profile") %in% names(data))) {
-    stop("Paired data must include task and profile identifiers.", call. = FALSE)
+  missing_columns <- setdiff(c("task", "profile"), names(data))
+  if (length(missing_columns)) {
+    stop("Paired data is missing required column(s): ", paste(missing_columns, collapse = ", "), ".",
+         call. = FALSE)
   }
   valid_id <- function(x) is.atomic(x) && is.null(dim(x)) && !anyNA(x) &&
     !any(as.character(x) == "") && (!is.numeric(x) || all(is.finite(x)))
@@ -186,7 +188,10 @@ paired_model_data <- function(data, design, terms, groups) {
     stop("Each respondent-task needs exactly one profile 1 and 2.", call. = FALSE)
   }
   r2 <- r2[o2][order(o1)]
-  if (any(data$y[r1] + data$y[r2] != 1)) stop("Paired outcomes must be complementary.", call. = FALSE)
+  if (any(data$y[r1] + data$y[r2] != 1)) {
+    stop("Paired outcomes must be complementary: for each respondent-task, profile 1 and profile 2 ",
+         "must have opposite 0/1 outcomes. Check the outcome coding and profile pairing.", call. = FALSE)
+  }
   model <- attr(data, "dgp")
   if (!identical(model$specification, "latent")) model <- NULL
   # External score columns are allowed even on simulated data; only power restricts selections.
@@ -200,9 +205,14 @@ paired_model_data <- function(data, design, terms, groups) {
       as.numeric(as.character(data[[a$attribute]][r1]) == a$level) -
         as.numeric(as.character(data[[a$attribute]][r2]) == a$level)
     } else {
+      if (!a$source_column %in% names(data)) {
+        stop("Selected score column '", a$source_column, "' is missing from `data`. Add that column or ",
+             "select an existing score column.", call. = FALSE)
+      }
       x <- data[[a$source_column]]
       if (is.null(x) || !is.numeric(x) || !is.null(dim(x)) || any(!is.finite(x))) {
-        stop("Selected score column '", a$source_column, "' must be finite numeric values.", call. = FALSE)
+        stop("Selected score column '", a$source_column,
+             "' must contain finite numeric values with one value per profile.", call. = FALSE)
       }
       # Valid integer scores can have differences outside the 32-bit integer range.
       x <- as.numeric(x)
@@ -526,12 +536,17 @@ paired_covariance <- function(blocks, C, eligible, n, G, k, scale, vcov, inferen
 #' profile 1. Probability output projects fitted probabilities onto the ordinary AMCE design and
 #' includes uncertainty from the fitted logit and the sampled profiles/respondents.
 #'
-#' @param data Profile rows with binary complementary outcomes, respondent and task identifiers,
-#'   exactly one profile 1 and 2 per task, and the design's attribute columns.
-#' @param design A design returned by [conjoint_design()].
+#' @param data A nonempty data frame with unique column names, numeric binary `y`, non-missing
+#'   `respondent`, `task` and `profile` identifiers, and the design's attribute columns. Each
+#'   respondent-task must have exactly one profile 1 and one profile 2, with one outcome 1 and the
+#'   other 0. Each attribute column must be a vector with one value per profile, using only levels
+#'   declared in `design`. Missing outcomes or attribute values are rejected, never omitted.
+#' @param design A `cj_design` from [conjoint_design()] declaring the full intended attribute levels.
+#'   The first level of each attribute is the reference even when absent from the observed sample.
 #' @param terms Nonempty unique character vector. Attributes select their non-reference dummies;
-#'   other names select finite numeric score columns. NULL uses an attached latent model's terms,
-#'   or all design attributes.
+#'   other names select finite numeric score columns, which must be present in `data`. Select external
+#'   score or rating columns explicitly. NULL uses an attached latent model's terms, or all design
+#'   attributes.
 #' @param groups Group names in desired order, as in [estimate_amce()]. If omitted, factor group
 #'   levels or the first appearance of character groups determines the order and reference group.
 #'   Use `groups = model$groups` to retain a prepared model's order after shuffling data rows.
@@ -551,6 +566,10 @@ paired_covariance <- function(blocks, C, eligible, n, G, k, scale, vcov, inferen
 #'   otherwise it is the stated regression projection. Probability CR1 includes both sources of
 #'   uncertainty. No intercept is added to the paired logit. Labels are never interpreted as formulas.
 #'
+#'   Supply both `data` and `design` explicitly; the design is not inferred from observed levels.
+#'   Invalid inputs stop with an error. Non-estimable effects, nonconvergent fits or failed inference
+#'   instead retain result rows with `status = "failed"` and a `failure_reason`.
+#'
 #'   For repeated fits in parallel, use PSOCK workers (`parallel::makePSOCKcluster()`), as
 #'   [power_sim()] does. With a threaded BLAS such as OpenMP OpenBLAS, forked workers
 #'   (`parallel::mclapply()`, `future::multicore`) can hang after the parent has fitted a large
@@ -568,6 +587,14 @@ paired_covariance <- function(blocks, C, eligible, n, G, k, scale, vcov, inferen
 #' estimate_paired(data, design, scale = "probability")
 estimate_paired <- function(data, design, terms = NULL, groups = NULL, vcov = c("CR1", "CR2"),
                             inference = NULL, alpha = 0.05, scale = c("latent", "probability")) {
+  if (missing(design)) {
+    stop("`design` is missing. Pass the `cj_design` from conjoint_design() that lists the attribute ",
+         "columns of `data`, as in estimate_paired(data, design).", call. = FALSE)
+  }
+  if (missing(data)) {
+    stop("`data` is missing. Pass paired profile rows with outcomes, respondent, task, profile, and ",
+         "design attribute columns, as in estimate_paired(data, design).", call. = FALSE)
+  }
   vcov <- match.arg(vcov)
   scale <- match.arg(scale)
   inference <- check_inference(vcov, inference, alpha)

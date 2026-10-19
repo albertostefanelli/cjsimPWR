@@ -3,11 +3,13 @@
 #' Fits a single joint least-squares model on profile rows, with respondent-clustered standard errors,
 #' and reports each group's AMCEs together with subsequent-group-minus-first-group contrasts.
 #'
-#' @param data Profile rows with finite numeric `y`, a non-missing `respondent` identifier, the
-#'   design's attribute columns, and `group` when estimating subgroup effects. A respondent must
-#'   belong to only one group. Missing outcomes or attribute values are rejected, never omitted.
-#' @param design A `cj_design` from `conjoint_design()`. Its first level is always the reference,
-#'   even when that level is absent from the sample.
+#' @param data A nonempty data frame with uniquely named columns for finite numeric `y`, non-missing
+#'   `respondent` identifiers and the design's attributes. Each attribute column must be a vector
+#'   with one value per profile, using only levels declared in `design`. Missing outcomes or
+#'   attribute values are rejected, never omitted. Add `group` for subgroup estimation; each
+#'   respondent must belong to only one group.
+#' @param design A `cj_design` from [conjoint_design()] declaring the full intended attribute levels.
+#'   The first level of each attribute is the reference even when absent from the observed sample.
 #' @param groups Group names in the desired order. Each subsequent group is compared with the first.
 #'   If NULL, use the group factor's levels, or first appearance for character groups; an absent or
 #'   entirely NA group column means no subgroups. Supply this argument to fix character-group order
@@ -26,6 +28,10 @@
 #'
 #' @details CR1 is the cluster-robust covariance times `G/(G-1) * (n-1)/(n-k)`, where `G` is all
 #'   respondents in the joint fit, `n` is profile rows and `k` is the fitted rank.
+#'
+#'   Supply both `data` and `design` explicitly; the design is not inferred from observed levels.
+#'   Invalid inputs stop with an error. Non-estimable effects or failed inference instead retain
+#'   result rows with `status = "failed"` and a `failure_reason`, as described below.
 #'
 #' @return A data frame in supplied group, attribute and level order, with AMCE rows preceding
 #'   differences:
@@ -80,6 +86,14 @@
 #' estimate_amce(grouped, design, groups = c("A", "B"))
 estimate_amce <- function(data, design, groups = NULL, vcov = c("CR1", "CR2"),
                           inference = NULL, alpha = 0.05) {
+  if (missing(design)) {
+    stop("`design` is missing. Pass the `cj_design` from conjoint_design() that lists the attribute ",
+         "columns of `data`, as in estimate_amce(data, design).", call. = FALSE)
+  }
+  if (missing(data)) {
+    stop("`data` is missing. Pass a data frame with outcomes, respondent identifiers, and the design attributes, ",
+         "as in estimate_amce(data, design).", call. = FALSE)
+  }
   vcov <- match.arg(vcov)
   inference <- check_inference(vcov, inference, alpha)
   input <- amce_model_data(data, design, groups)
@@ -232,9 +246,26 @@ amce_model_data <- function(data, design, groups) {
     stop("`design` must be created with conjoint_design().", call. = FALSE)
   }
   attrs <- names(design$levels)
-  if (!is.data.frame(data) || nrow(data) == 0 || anyDuplicated(names(data)) ||
-      !all(c("y", "respondent", attrs) %in% names(data))) {
-    stop("`data` must have rows and unique columns including y, respondent and every design attribute.", call. = FALSE)
+  if (!is.data.frame(data)) {
+    stop("`data` must be a data frame with outcomes, respondent identifiers, and the design attributes.",
+         call. = FALSE)
+  }
+  if (nrow(data) == 0) {
+    stop("`data` has no rows; supply at least one profile row.", call. = FALSE)
+  }
+  duplicate_names <- unique(names(data)[duplicated(names(data))])
+  if (length(duplicate_names)) {
+    duplicate_names[is.na(duplicate_names)] <- "<missing name>"
+    duplicate_names[duplicate_names == ""] <- "<empty name>"
+    stop("`data` has duplicate column name(s): ", paste(duplicate_names, collapse = ", "), ".",
+         call. = FALSE)
+  }
+  required <- c("y", "respondent", attrs)
+  missing_columns <- setdiff(required, names(data))
+  if (length(missing_columns)) {
+    stop("`data` is missing required column(s): ", paste(missing_columns, collapse = ", "),
+         "; every design attribute and the y and respondent columns must be present.",
+         call. = FALSE)
   }
   if (!is.numeric(data$y) || !is.null(dim(data$y)) || any(!is.finite(data$y))) {
     stop("`y` must be finite numeric values with no missing observations.", call. = FALSE)
@@ -267,7 +298,11 @@ amce_model_data <- function(data, design, groups) {
     data.frame(attribute = a, level = lv[-1], reference_level = lv[1], stringsAsFactors = FALSE)
   }))
   D <- do.call(cbind, lapply(attrs, function(a) {
-    values <- as.character(data[[a]])
+    column <- data[[a]]
+    if (!is.null(dim(column))) {
+      stop("attribute column '", a, "' must be a vector with one value per profile.", call. = FALSE)
+    }
+    values <- as.character(column)
     lv <- design$levels[[a]]
     if (anyNA(values) || any(!values %in% lv)) {
       stop("attribute '", a, "' contains missing values or levels outside the design.", call. = FALSE)
