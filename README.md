@@ -50,16 +50,16 @@ power <- power_sim(
   n_tasks   = 5,
   seed      = 2114
 )
-power
-#> Conjoint simulation: 1000 runs; logit DGP; CR1 / normal inference.
-#>  type group attribute level true_amce Power         Type I error  Type S        Type M        Coverage      Runs (failed) Valid runs
-#>  amce <NA>  var_1     1      0.05     0.976 (0.005)               0.000 (0.000) 1.029 (0.008) 0.948 (0.007) 1000 (0)      1000
-#>  amce <NA>  var_2     1     -0.05     0.874 (0.010)               0.000 (0.000) 1.083 (0.009) 0.946 (0.007) 1000 (0)      1000
-#>  amce <NA>  var_2     2      0.00                   0.054 (0.007)                             0.946 (0.007) 1000 (0)      1000
-#> Monte Carlo standard errors in parentheses.
-#> Power is for non-null targets; Type I error is for null targets, not nonsignificant estimates.
-#> Measures are conditional on runs with valid inference.
+power$performance[c("attribute", "level", "reference_level", "true_amce", "power",
+                   "type_1_error", "type_s", "type_m", "coverage", "n_valid", "n_sig")]
+#>   attribute level reference_level   true_amce power type_1_error type_s   type_m coverage n_valid n_sig
+#> 1     var_1     1               0  0.04999993 0.976           NA      0 1.029112    0.948    1000   976
+#> 2     var_2     1               0 -0.04999992 0.874           NA      0 1.082519    0.946    1000   874
+#> 3     var_2     2               0  0.00000000    NA        0.054     NA       NA    0.946    1000    54
 ```
+
+The full `$performance` table also includes Monte Carlo standard errors;
+README examples omit those columns for readability.
 
 Each row is one non-reference level, compared with its attribute’s first
 (reference) level. `Type S` is the share of significant estimates with
@@ -89,12 +89,16 @@ guide](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/simulation_m
 
 ``` r
 
-power_sim(levels = c(2, 3),
-          true_amce = list(0.05, c(-0.05, 0)),
-          units = 600,
-          n_tasks = 5,
-          sigma = 0.05,
-          seed = 2114)
+heterogeneous <- power_sim(
+  levels = c(2, 3),
+  true_amce = list(0.05, c(-0.05, 0)),
+  units = 600,
+  n_tasks = 5,
+  sigma = 0.05,
+  seed = 2114
+)
+heterogeneous$performance[c("attribute", "level", "reference_level", "true_amce", "power",
+                            "type_1_error", "type_s", "type_m", "coverage", "n_valid", "n_sig")]
 ```
 
 ## Subgroups
@@ -118,12 +122,14 @@ groups <- power_sim(
   seed      = 12
 )
 
-subset(groups$performance, type == "difference")[, c("group", "attribute", "level", "reference_level",
-  "power", "power_mcse", "type_1_error", "type_1_error_mcse")]
-#>                   group attribute level reference_level power power_mcse type_1_error type_1_error_mcse
-#> 7 Republican - Democrat     var_1     1               0 0.867  0.0107383           NA                NA
-#> 8 Republican - Democrat     var_2     1               0    NA         NA        0.052       0.007021111
-#> 9 Republican - Democrat     var_2     2               0    NA         NA        0.044       0.006485677
+subset(groups$performance, type == "difference")[, c(
+  "group", "attribute", "level", "reference_level", "power", "type_1_error",
+  "type_s", "type_m"
+)]
+#>                   group attribute level reference_level power type_1_error type_s   type_m
+#> 7 Republican - Democrat     var_1     1               0 0.867           NA      0 1.064877
+#> 8 Republican - Democrat     var_2     1               0    NA        0.052     NA       NA
+#> 9 Republican - Democrat     var_2     2               0    NA        0.044     NA       NA
 ```
 
 A difference compares the causal effect of the same level for the two
@@ -155,27 +161,29 @@ candidates <- lapply(candidate_units, function(n) {
 
 focal <- do.call(rbind, lapply(seq_along(candidates), function(i) {
   perf <- candidates[[i]]$performance[1, ]
-  data.frame(units = candidate_units[i],
-            power = perf$power,
-            power_mcse = perf$power_mcse,
-             n_valid = perf$n_valid,
-             n_failed = sum(candidates[[i]]$failures$n_failed))
+  data.frame(
+    units = candidate_units[i],
+    power = perf$power,
+    type_m = perf$type_m,
+    n_valid = perf$n_valid,
+    n_failed = sum(candidates[[i]]$failures$n_failed)
+  )
 }))
 
 focal
-#>   units     power  power_mcse n_valid n_failed
-#> 1   200 0.6200000 0.028023799     300        0
-#> 2   400 0.8733333 0.019202623     300        0
-#> 3   600 0.9700000 0.009848858     300        0
-#> 4   800 0.9900000 0.005744563     300        0
+#>   units     power   type_m n_valid n_failed
+#> 1   200 0.6200000 1.272539     300        0
+#> 2   400 0.8733333 1.111633     300        0
+#> 3   600 0.9700000 1.018522     300        0
+#> 4   800 0.9900000 1.011148     300        0
 ```
 
-Compare `power` against the 80% target, allowing for `power_mcse`;
-inspect `n_failed` and `$failures` for any run that did not produce a
-usable estimate. Near the threshold, increase `sim_runs` for more
-precision before deciding between neighbouring candidates. This compares
-the candidates shown; it does not search for, or guarantee, the minimum
-sample size that reaches the target.
+Compare `power` against the 80% target and inspect `n_failed` and
+`$failures` for runs without a usable estimate. Near the threshold,
+increase `sim_runs` for more precision before deciding between
+neighbouring candidates. This compares the candidates shown; it does not
+search for, or guarantee, the minimum sample size that reaches the
+target.
 
 <!--
 ## A new approach: paired logit for trade-off designs
@@ -207,7 +215,8 @@ model <- utility_model(design, list(
   term_dummy("democracy", coef = -0.8)))
 result <- power_sim(model = model, estimators = c("amce", "paired"),
                     units = 500, n_tasks = 4, sim_runs = 200, seed = 1)
-result$performance
+result$performance[c("estimator", "scale", "type", "term", "attribute", "level", "true_value",
+                     "power", "type_1_error", "type_s", "type_m", "coverage", "n_valid", "n_sig")]
 ```
 
 Here a democratic violation costs a candidate 0.8 on the logit scale, a
@@ -229,30 +238,6 @@ ratio need not equal the average voter’s trade-off. Use at least 1,000
 runs for a final analysis.
 
 -->
-
-## Estimating from existing data
-
-`estimate_amce(data, design)` expects a nonempty data frame with one row per
-profile and uniquely named columns for finite numeric `y`, non-missing
-`respondent`, and every design attribute. Pass a `cj_design` that declares
-the full intended attribute levels and references; reuse it when fitting
-so the comparisons stay explicit even if a level is absent from the
-sample. Missing outcomes or attribute values, undeclared values, and
-malformed attribute columns stop with an error. With `groups`, add a
-non-missing `group` column.
-
-`estimate_paired(data, design)` uses the same data frame and design
-requirements, plus `task` and `profile` identifiers. Each respondent-task
-must contain profiles 1 and 2 with complementary binary `y` values; check
-outcome coding and profile pairing if this condition fails. For external
-score or rating analyses, include finite numeric profile-level columns
-and select them explicitly with `terms =`. A missing selected score
-column and a present but invalid score column are distinct input errors.
-Invalid input data stop estimation, while non-estimable effects,
-nonconvergent fits, or failed inference retain result rows with their
-failure status. See the [paired logit
-guide](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/paired_logit.md)
-for examples.
 
 ## Further guides
 
