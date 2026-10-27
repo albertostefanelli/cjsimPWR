@@ -1,5 +1,35 @@
 # Paired logit
 
+## Why a paired logit
+
+The paired logit in cjsimPWR is the conditional logit of discrete choice (McFadden 1974; Train 2009)
+applied to tasks with two profiles. In political science, Graham and Svolik (2020) use it to
+estimate how much policy proximity and partisan loyalty voters give up to elect a more democratic
+candidate. Compared with AMCE regression, it offers three useful features.
+
+- It can easily include characteristics of the respondent that relate to the profile. A term can
+  record whether a level is the respondent's own or how the respondent rates it, so the same level
+  can help a profile with one respondent and hurt it with another.
+- It can pool information about a shared preference across respondent groups. To assess
+  whether respondents reward candidates from their own party, subgroup AMCE analysis estimates every
+  party's AMCE within each group of partisans. A match term instead estimates one coefficient, the
+  value of a candidate from the respondent's own party, from all respondents, assuming the reward is
+  the same for every party. Pooling can improve precision when this assumption and the choice model
+  are appropriate; the match coefficient and subgroup AMCEs measure different quantities.
+- Its coefficients do not have the design-imposed bounds of AMCEs, which are changes in choice
+  probability. Under the additive utility model, ratios of coefficients express trade-offs in the
+  units of the corresponding terms.[^design]
+
+[^design]: A common rescaling of all utility coefficients cancels in their ratio (Train 2009,
+    ch. 2). Omitting relevant terms or fitting one coefficient vector to heterogeneous preferences
+    need not rescale all coefficients equally, so their ratios can change. A ratio of pooled
+    coefficients is not generally the average of respondents' trade-offs; see
+    [Heterogeneous coefficients](#heterogeneous-coefficients).
+
+For power analysis, you describe how respondents choose (their ratings, the shares matching each
+level, how coefficients vary and how groups differ), and the package derives the AMCEs and
+coefficients that each analysis targets.
+
 ## Design
 
 `conjoint_design()` names the attributes and lists their levels. The first level of each attribute is
@@ -79,37 +109,6 @@ In the population targets, `input` is the coefficient you supplied and `true_val
 analysis would recover from this population with an unlimited number of respondents. They are equal
 here; they differ when coefficients vary across respondents (see
 [Heterogeneous coefficients](#heterogeneous-coefficients)).
-
-## Choosing coefficients
-
-Coefficients have no natural unit. To judge their size, compare two profiles that are equal in every
-other respect and give one a one-unit score advantage on the term; `plogis(coef)` is the probability
-that it is chosen.
-
-| `coef` | `plogis(coef)` |
-| ---: | ---: |
-| 0 | 0.50 |
-| 0.2 | 0.55 |
-| 0.5 | 0.62 |
-| 0.8 | 0.69 |
-| 1.0 | 0.73 |
-| 1.5 | 0.82 |
-| 2.0 | 0.88 |
-
-Negative coefficients work the other way: at −0.8 the rule-breaking candidate is chosen with
-probability `plogis(-0.8)`, about 0.31, against an otherwise identical candidate. For a rating term
-the advantage is per rating point: a two-point lead at `coef = 0.3` gives `plogis(0.6)`, about 0.65.
-These compare two profiles that differ in one thing only. The AMCE, which averages over the other
-attributes, the competing profile and the respondents, is smaller; the package computes it for you.
-
-Take coefficients from earlier studies or a pilot where possible, and mind the units: a coefficient
-per point on a 0–10 scale is ten times one per point on a 0–1 scale. Without evidence, compare a few
-plausible values rather than treating one as known.
-
-`mean` and `sd` in `term_rating()` describe the ratings. They are normal draws and are not clipped or
-rounded, so a mean of 4 with `sd = 2` produces some ratings below 0 and some above 10; a bounded
-rating scale is only approximated. `coef_sd`, zero by default, lets the coefficient itself vary across
-respondents; see [Heterogeneous coefficients](#heterogeneous-coefficients).
 
 ## Simulating and estimating one experiment
 
@@ -445,3 +444,9 @@ robustness of support for democracy in the United States. *American Political Sc
 Hainmueller, J., Hopkins, D. J., & Yamamoto, T. (2014). Causal inference in conjoint analysis:
 Understanding multidimensional choices via stated preference experiments. *Political Analysis*,
 22(1), 1–30. <https://doi.org/10.1093/pan/mpt024>
+
+McFadden, D. (1974). Conditional logit analysis of qualitative choice behavior. In P. Zarembka
+(Ed.), *Frontiers in Econometrics* (pp. 105–142). Academic Press.
+
+Train, K. E. (2009). *Discrete Choice Methods with Simulation* (2nd ed.). Cambridge University Press.
+<https://eml.berkeley.edu/books/choice2.html>
