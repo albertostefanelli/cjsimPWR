@@ -265,7 +265,7 @@ The `strong - weak` rows are the differences between groups, which `power_sim()`
 **Model.** Respondent $i$ chooses profile 1 in task $t$ with probability
 
 $$
-\Pr(Y_{it1} = 1) = \operatorname{logit}^{-1}\!\left(U_{it1} - U_{it2}\right),
+\Pr(Y_{it1} = 1) = \frac{1}{1 + e^{-(U_{it1} - U_{it2})}},
 \qquad
 U_{itj} = \sum_k \beta_{ik} x_{itjk}.
 $$
