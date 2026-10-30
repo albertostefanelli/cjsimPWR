@@ -245,7 +245,6 @@ print.cj_performance <- function(x, digits = 3, ...) {
   if (all(c("n_runs", "n_failed") %in% names(x))) {
     out[["Runs (failed)"]] <- paste0(x$n_runs, " (", x$n_failed, ")")
   }
-  if ("n_valid" %in% names(x)) out[["Valid runs"]] <- x$n_valid
   print(out, row.names = FALSE, right = FALSE)
   cat("Monte Carlo standard errors in parentheses.\n")
   if ("Type I error" %in% names(out)) {
