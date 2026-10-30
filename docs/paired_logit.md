@@ -317,12 +317,17 @@ difference, instead of power. `units` and `n_tasks` can be given per group: `uni
 
 ## Technical appendix
 
-**Model.** Respondent *i* chooses profile 1 in task *t* with probability
-logit⁻¹(*U*<sub>*it*1</sub> − *U*<sub>*it*2</sub>), where *U*<sub>*itj*</sub> = Σ<sub>*k*</sub>
-*β*<sub>*ik*</sub> *x*<sub>*itjk*</sub> sums, over terms *k*, the respondent's coefficient times
-the profile's score on that term: a dummy, a fixed score, a match indicator or the respondent's
-rating. Coefficients and respondent scores are fixed across a respondent's tasks. Each task has two
-profiles with complementary outcomes.
+**Model.** Respondent $i$ chooses profile 1 in task $t$ with probability
+
+$$
+\Pr(Y_{it1} = 1) = \operatorname{logit}^{-1}\!\left(U_{it1} - U_{it2}\right),
+\qquad
+U_{itj} = \sum_k \beta_{ik} x_{itjk}.
+$$
+
+Utility $U_{itj}$ sums, over terms $k$, the respondent's coefficient $\beta_{ik}$ times
+the profile's score $x_{itjk}$ on that term: a dummy, a fixed score, a match indicator or the
+respondent's rating. Coefficients and respondent scores are fixed across a respondent's tasks.
 
 **Estimator.** `estimate_paired()` fits a logit without intercept[^intercept] to the
 profile-1-minus-profile-2 differences of the scores. Positive coefficients favour profile 1. Standard
