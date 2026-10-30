@@ -23,10 +23,14 @@ library(cjsimPWR)
 design <- conjoint_design(list(
   policy    = c("left", "centre", "right"),
   party     = c("A", "B", "C"),
-  democracy = c("D+", "D-")))
+  democracy = c("D+", "D-"),
+  record    = c("neutral", "good", "bad")))
 ```
 
-`D+` is a candidate who respects democratic rules and `D-` one who does not.
+- `policy`: the candidate's policy position (`left`, `centre`, `right`).
+- `party`: the candidate's affiliation (`A`, `B`, `C` are generic party labels).
+- `democracy`: whether the candidate respects democratic rules (`D+`) or violates them (`D-`).
+- `record`: the candidate's performance record (`neutral`, `good`, `bad`); a better record is preferred by all respondents in this example.
 
 ## Utility terms
 
@@ -37,7 +41,7 @@ Each attribute gets a term that says what a profile receives for it. A profile's
 | Term | Score of a profile |
 | --- | --- |
 | `term_dummy()` | 1 for the non-reference level shown, 0 otherwise; one `coef` per non-reference level |
-| `term_score()` | A fixed number assigned to each level in `scores` |
+| `term_score()` | A fixed number assigned to each level in `scores`; `coef` is the utility change per score point |
 | `term_match()` | 1 when the level is the respondent's own, 0 otherwise; `share` gives the proportion of respondents matching each level |
 | `term_rating()` | The respondent's own rating of the level, drawn from a normal distribution with `mean` and `sd` |
 
@@ -48,18 +52,20 @@ In the example below:
 - `policy`: every respondent has their own rating of each position. Ratings of `left` average 6 with an `sd` of 2, so about two thirds of respondents rate it between 4 and 8; `centre` averages 5 and `right` 4. A profile adds 0.05 for every rating point.
 - `party`: 40 percent of respondents belong to party A, 30 percent to B and 20 percent to C; the remaining 10 percent belong to none. A profile from the respondent's own party adds 0.4.
 - `democracy`: a candidate who does not comply with democratic norms (`D-`) loses 0.3, compared with `D+`, the reference level.
+- `record`: `term_score()` assigns fixed scores of 0 to `neutral`, 1 to `good` and −1 to `bad`. With `coef = 0.2`, a good record adds 0.2 to utility and a bad one subtracts 0.2, relative to neutral. This is a valence attribute: everyone prefers a better record. Unlike `term_rating()`, these scores do not vary across respondents. One coefficient applies to each score point, so this coding assumes equal steps from bad to neutral and neutral to good. Use `term_dummy()` instead if good and bad should have separate effects relative to neutral.
 
 ```r
 model <- utility_model(design, terms = list(
   term_rating("policy", mean = c(6, 5, 4), sd = c(2, 1.5, 2), coef = 0.05),
   term_match("party", share = c(0.4, 0.3, 0.2), coef = 0.4),
-  term_dummy("democracy", coef = -0.3)))
+  term_dummy("democracy", coef = -0.3),
+  term_score("record", scores = c(neutral = 0, good = 1, bad = -1), coef = 0.2)))
 model
 ```
 
 ```text
 Latent utility model (logit)
-Attributes (reference level first): policy [left, centre, right]; party [A, B, C]; democracy [D+, D-]
+Attributes (reference level first): policy [left, centre, right]; party [A, B, C]; democracy [D+, D-]; record [neutral, good, bad]
 Groups: ungrouped
 
 Coefficient means and SDs:
@@ -67,12 +73,14 @@ Coefficient means and SDs:
  policy_rating rating    policy  <NA>        0.05         0
    party_match  match     party  <NA>        0.40         0
      democracy  dummy democracy    D-       -0.30         0
+  record_score  score    record  <NA>        0.20         0
 
 Population targets:
  estimator  scale        type        target input true_value  null
     paired latent coefficient policy_rating  0.05       0.05 FALSE
     paired latent coefficient   party_match  0.40       0.40 FALSE
     paired latent coefficient democracy[D-] -0.30      -0.30 FALSE
+    paired latent coefficient  record_score  0.20       0.20 FALSE
 See $truth for full targets and precision, $parameters for coefficients, and $diagnostics for numerical details.
 ```
 
@@ -91,21 +99,21 @@ data <- simulate_experiment(design,
   model = model)
 
 print(head(data[c("respondent", "task", "profile", "policy", "policy_rating",
-                  "party", "party_match", "democracy", "y")]), digits = 3)
+                  "party", "party_match", "democracy", "record", "record_score", "y")]), digits = 3)
 
 ```
 
 ```text
-  respondent task profile policy policy_rating party party_match democracy y
-1          1    1       1   left          6.67     B           0        D+ 0
-2          1    1       2   left          6.67     A           1        D- 1
-3          1    2       1  right         -0.46     C           0        D+ 0
-4          1    2       2   left          6.67     C           0        D+ 1
-5          1    3       1   left          6.67     C           0        D- 1
-6          1    3       2  right         -0.46     A           1        D+ 0
+  respondent task profile policy policy_rating party party_match democracy  record record_score y
+1          1    1       1   left          5.00     B           1        D+ neutral            0 1
+2          1    1       2   left          5.00     A           0        D+ neutral            0 0
+3          1    2       1  right          4.75     C           0        D+ neutral            0 1
+4          1    2       2  right          4.75     C           0        D+ neutral            0 0
+5          1    3       1   left          5.00     C           0        D-     bad           -1 0
+6          1    3       2   left          5.00     B           1        D+     bad           -1 1
 ```
 
-Each row is one profile, and `y` is 1 for the chosen one. Respondent 1 rates `left` 6.67 and `right` −0.46 and belongs to party A. In their first task they traded democracy for partisan loyalty: they chose a `D-` candidate of their own party over a `D+` candidate of party B.
+Each row is one profile, and `y` is 1 for the chosen one. Respondent 1 rates `left` 5.00 and `right` 4.75 and belongs to party B. In their first task they chose a candidate of their own party over an otherwise identical candidate of party A. The `record_score` column contains the fixed score for the record shown: 0 for neutral, 1 for good and −1 for bad.
 
 `estimate_paired()` fits the paired logit. By default it uses all the model's terms and reports their coefficients:
 
@@ -116,9 +124,10 @@ print(fit[c("term", "estimate", "std.error")], digits = 3)
 
 ```text
            term estimate std.error
-1 policy_rating   0.0287    0.0185
-2   party_match   0.5483    0.0707
-3     democracy  -0.3830    0.0604
+1 policy_rating   0.0627    0.0161
+2   party_match   0.4099    0.0676
+3     democracy  -0.2794    0.0556
+4  record_score   0.1830    0.0386
 ```
 
 
@@ -140,9 +149,10 @@ latent
 Conjoint simulation: 200 runs; logit DGP; CR1 / normal inference.
 Estimators: paired; scale: latent
  estimator scale  type        term          attribute level true_value Power         Type S        Type M        Coverage      Runs (failed)
- paired    latent coefficient policy_rating policy    <NA>   0.05      0.995 (0.005) 0.000 (0.000) 1.005 (0.016) 0.945 (0.016) 200 (0)
- paired    latent coefficient party_match   party     <NA>   0.40      1.000 (0.000) 0.000 (0.000) 0.995 (0.008) 0.940 (0.017) 200 (0)
- paired    latent coefficient democracy     democracy D-    -0.30      1.000 (0.000) 0.000 (0.000) 1.000 (0.009) 0.975 (0.011) 200 (0)
+ paired    latent coefficient policy_rating policy    <NA>   0.05      0.985 (0.009) 0.000 (0.000) 1.010 (0.017) 0.945 (0.016) 200 (0)
+ paired    latent coefficient party_match   party     <NA>   0.40      1.000 (0.000) 0.000 (0.000) 1.009 (0.009) 0.935 (0.017) 200 (0)
+ paired    latent coefficient democracy     democracy D-    -0.30      1.000 (0.000) 0.000 (0.000) 0.985 (0.010) 0.945 (0.016) 200 (0)
+ paired    latent coefficient record_score  record    <NA>   0.20      1.000 (0.000) 0.000 (0.000) 1.003 (0.009) 0.960 (0.014) 200 (0)
 Monte Carlo standard errors in parentheses.
 Measures are conditional on runs with valid inference.
 ```
@@ -157,7 +167,7 @@ As in an AMCE power analysis (`power_sim()` with `true_amce`), the result stores
 
 ## Comparing with AMCE regression
 
-`estimators = c("amce", "paired")` runs ordinary AMCE regression and the paired logit on the same simulated experiments. Both are then reported on the probability scale, so that they estimate the same AMCEs. `power_sim()` prints a message to say so, and another reminding you that the policy and party rows compare levels, not rating points or the match coefficient.
+`estimators = c("amce", "paired")` runs ordinary AMCE regression and the paired logit on the same simulated experiments. Both are then reported on the probability scale, so that they estimate the same AMCEs. `power_sim()` prints a message to say so, and another reminding you that the policy, party and record rows compare levels, not rating or score points or the match coefficient.
 
 ```r
 both <- power_sim(model = model, units = 1000, n_tasks = 5,
@@ -174,20 +184,22 @@ data.frame(
 
 ```text
           effect true_amce power_amce power_paired sd_amce sd_paired
-1 policy: centre    -0.012      0.170        0.930   0.012     0.004
-2  policy: right    -0.024      0.480        0.985   0.012     0.006
-3       party: B    -0.009      0.150        0.855   0.013     0.003
-4       party: C    -0.019      0.335        1.000   0.013     0.004
-5  democracy: D-    -0.073      1.000        1.000   0.009     0.009
+1 policy: centre    -0.012      0.170        0.905   0.012     0.004
+2  policy: right    -0.024      0.510        0.970   0.013     0.006
+3       party: B    -0.009      0.185        0.810   0.014     0.004
+4       party: C    -0.019      0.395        1.000   0.013     0.004
+5  democracy: D-    -0.072      1.000        1.000   0.010     0.010
+6   record: good     0.048      0.985        1.000   0.012     0.006
+7    record: bad    -0.048      0.980        1.000   0.012     0.006
 ```
 
-AMCE regression detects the small party-B effect in 15 percent of runs, the paired logit in 86 percent. This is to be expected in this case as the paired logit uses each respondent's ratings and party match; AMCE regression does not.[^recode]
+AMCE regression detects the small party-B effect in 18.5 percent of runs, the paired logit in 81 percent. This is to be expected in this case as the paired logit uses each respondent's ratings and party match; AMCE regression does not.[^recode] The paired logit also uses the record scores to estimate one common slope for both level comparisons.
 
 [^recode]: AMCE regression can be used for the same purpose if the attributes are recoded relative to the respondent before fitting. Subgroup AMCEs by the respondent's party also use this information without assuming one bonus for every party, but each group's estimates come from that group alone, so they are less precise.
 
 ## Sample size
 
-Hold the model and `n_tasks` fixed and compare values of `units`. This loop reports power for the `policy_rating` coefficient, the hardest of the three to detect, at 250 and 500 respondents.
+Hold the model and `n_tasks` fixed and compare values of `units`. This loop reports power for the `policy_rating` coefficient, the hardest of the four to detect, at 250 and 500 respondents.
 
 ```r
 sizes <- c(250, 500)
@@ -203,8 +215,8 @@ print(do.call(rbind, rows), digits = 2)
 
 ```text
   units power power_mcse
-1   250  0.60      0.035
-2   500  0.84      0.026
+1   250  0.56      0.035
+2   500  0.85      0.025
 ```
 
 ## Heterogeneous coefficients
@@ -217,19 +229,21 @@ With varying coefficients, the population targets are computed by simulation, wh
 mixed <- utility_model(design, terms = list(
   term_rating("policy", mean = c(6, 5, 4), sd = c(2, 1.5, 2), coef = 0.05, coef_sd = 0.03),
   term_match("party", share = c(0.4, 0.3, 0.2), coef = 0.4),
-  term_dummy("democracy", coef = -0.3, coef_sd = 0.3)),
+  term_dummy("democracy", coef = -0.3, coef_sd = 0.3),
+  term_score("record", scores = c(neutral = 0, good = 1, bad = -1), coef = 0.2)),
   control = list(paired_cells = 131072))
 print(mixed$truth[c("term", "input", "true_value", "reference_half_width")], digits = 3)
 ```
 
 ```text
            term input true_value reference_half_width
-1 policy_rating  0.05     0.0493             0.000257
-2   party_match  0.40     0.3953             0.000784
-3     democracy -0.30    -0.2936             0.001154
+1 policy_rating  0.05     0.0492             0.000351
+2   party_match  0.40     0.3956             0.000730
+3     democracy -0.30    -0.2934             0.001005
+4  record_score  0.20     0.1978             0.000568
 ```
 
-`true_value` now differs from `input`. The paired logit fits one coefficient to everyone's choices even if each respondent has their own coefficient. Choice probabilities flatten out as they approach 0 or 1. So respondents above the average coefficient gain less probability than respondents below it lose. The population as a whole then looks less responsive than the average respondent, and the single fitted coefficient comes out closer to zero. The party target moves too, although its coefficient is fixed, because the varying policy and democracy coefficients add noise to every choice.
+`true_value` now differs from `input`. The paired logit fits one coefficient to everyone's choices even if each respondent has their own coefficient. Choice probabilities flatten out as they approach 0 or 1. So respondents above the average coefficient gain less probability than respondents below it lose. The population as a whole then looks less responsive than the average respondent, and the single fitted coefficient comes out closer to zero. The party and record targets move too, although their coefficients are fixed, because the varying policy and democracy coefficients add noise to every choice.
 
 When `coef_sd` is used, you can create such a model once and reuse it. Its targets do not depend on `units`, `n_tasks` or the experiment `seed`.
 
@@ -241,24 +255,28 @@ When `coef_sd` is used, you can create such a model once and reuse it. Its targe
 partisans <- utility_model(design, groups = c("weak", "strong"), terms = list(
   term_rating("policy", mean = c(6, 5, 4), sd = c(2, 1.5, 2), coef = 0.05),
   term_match("party", share = c(0.4, 0.35, 0.25), coef = list(weak = 0.2, strong = 0.6)),
-  term_dummy("democracy", coef = -0.3)))
+  term_dummy("democracy", coef = -0.3),
+  term_score("record", scores = c(neutral = 0, good = 1, bad = -1), coef = 0.2)))
 print(partisans$truth[c("group", "term", "true_value", "null")], digits = 3)
 ```
 
 ```text
-          group          term true_value  null
-1          weak policy_rating       0.05 FALSE
-2          weak   party_match       0.20 FALSE
-3          weak     democracy      -0.30 FALSE
-4        strong policy_rating       0.05 FALSE
-5        strong   party_match       0.60 FALSE
-6        strong     democracy      -0.30 FALSE
-7 strong - weak policy_rating       0.00  TRUE
-8 strong - weak   party_match       0.40 FALSE
-9 strong - weak     democracy       0.00  TRUE
+           group          term true_value  null
+1           weak policy_rating       0.05 FALSE
+2           weak   party_match       0.20 FALSE
+3           weak     democracy      -0.30 FALSE
+4           weak  record_score       0.20 FALSE
+5         strong policy_rating       0.05 FALSE
+6         strong   party_match       0.60 FALSE
+7         strong     democracy      -0.30 FALSE
+8         strong  record_score       0.20 FALSE
+9  strong - weak policy_rating       0.00  TRUE
+10 strong - weak   party_match       0.40 FALSE
+11 strong - weak     democracy       0.00  TRUE
+12 strong - weak  record_score       0.00  TRUE
 ```
 
-The `strong - weak` rows are the differences between groups, which `power_sim()` also tests. The `party_match` difference, 0.4, is the extra reward strong partisans give a candidate of their own party, estimated from the candidates of all three parties at once. Two rows are marked `null = TRUE`: the package has proved from the inputs that they are exactly zero, because the groups share these coefficients. Such rows report `type_1_error`, the share of runs that wrongly find a difference, instead of power. `units` and `n_tasks` can be given per group: `units = c(weak = 300, strong = 300)`.
+The `strong - weak` rows are the differences between groups, which `power_sim()` also tests. The `party_match` difference, 0.4, is the extra reward strong partisans give a candidate of their own party, estimated from the candidates of all three parties at once. Three rows are marked `null = TRUE`: the package has proved from the inputs that they are exactly zero, because the groups share these coefficients. Such rows report `type_1_error`, the share of runs that wrongly find a difference, instead of power. `units` and `n_tasks` can be given per group: `units = c(weak = 300, strong = 300)`.
 
 ## Technical appendix
 
@@ -290,7 +308,7 @@ Probability-scale targets are always the true population AMCEs, whatever the ana
 
 A target is marked `null = TRUE` only when a symmetry of the inputs proves it is zero, i.e., identical inputs for a level and its reference, exchangeable levels, or coefficients shared by two groups. A warning about an unresolved sign means a target is closer to zero than its half-width, so Type S and Type M have no fixed reference.
 
-**Custom analyses.** `paired_terms` in `power_sim()` and `terms` in `estimate_paired()` select which terms enter the paired logit: an attribute name selects its dummies, a score column name such as `policy_rating` selects that term. With the guide's model:
+**Custom analyses.** `paired_terms` in `power_sim()` and `terms` in `estimate_paired()` select which terms enter the paired logit: an attribute name selects its dummies, a score column name such as `policy_rating` or `record_score` selects that term. With the guide's model:
 
 - Leave out a term, for example the policy ratings. The remaining coefficients shrink towards zero (case 1 under Targets).
 - Experimental effects only, for example party dummies instead of the match (case 2 under Targets).
