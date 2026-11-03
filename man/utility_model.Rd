@@ -61,13 +61,13 @@ its default paired analysis and any cached AMCEs.
 }
 \examples{
 design <- conjoint_design(list(quality = c("low", "high"), democracy = c("D+", "D-")))
-model <- utility_model(design, list(term_score("quality", c(0, 2), 0.3),
+model <- utility_model(design, list(term_score("quality", c(1, 2), 0.3),
                                     term_dummy("democracy", -0.8)))
 model$truth
 
 # A small integration budget keeps this heterogeneous example quick.
 # Inspect reference_half_width before using exploratory truths for bias or coverage.
-mixed <- utility_model(design, list(term_score("quality", c(0, 2), 0.3, coef_sd = 0.1),
+mixed <- utility_model(design, list(term_score("quality", c(1, 2), 0.3, coef_sd = 0.1),
                                     term_dummy("democracy", -0.8, coef_sd = 0.2)),
                        control = list(paired_cells = 8192))
 mixed

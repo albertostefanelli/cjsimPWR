@@ -40,8 +40,9 @@ attribute is its reference level. Attributes keep the order given; the number of
 determined by \code{levels}.
 All attributes have finite, discrete levels. Numeric labels supplied in a list, such as
 \code{list(price = c(10, 20, 30))}, are categories, not a continuously randomized attribute. Use
-\code{\link[=term_score]{term_score()}} in \code{\link[=utility_model]{utility_model()}} to give these levels numeric utility scores; AMCE output
-still compares each level with the reference.
+\code{\link[=term_score]{term_score()}} in \code{\link[=utility_model]{utility_model()}} to give these levels utility scores; it ranks the numbers,
+so each step between adjacent levels counts the same. AMCE output still compares each level with
+the reference.
 
 Every attribute needs at least two levels; level labels within an attribute must be distinct and
 non-missing. Attribute names must be unique, and none may be \code{"group"}, \code{"respondent"}, \code{"task"},

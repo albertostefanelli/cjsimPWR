@@ -24,7 +24,10 @@ term, otherwise one unnamed scalar. A named list supplies separate values for ea
 \item{coef_sd}{coefficient standard deviations, with the same shape as \code{coef}. An unnamed scalar
 may be repeated across a dummy term's coefficients. The default is zero.}
 
-\item{scores}{finite, nonconstant fixed scores for all levels, including the reference.}
+\item{scores}{finite, nonconstant fixed numbers for all levels, including the reference.
+\code{term_score()} replaces them by their ranks (1 = lowest; equal numbers share a rank), so every
+step between adjacent distinct values counts the same; \code{\link[=utility_model]{utility_model()}} warns when this changes
+the differences between levels. \code{coef} is then the utility change per rank step.}
 
 \item{share}{probabilities of matching each level, including the reference. Their sum must not
 exceed one (apart from roundoff of at most \code{1e-12}, which is normalized). The remaining probability
@@ -47,7 +50,8 @@ set of level labels and are reordered to design order. Each numeric argument may
 list named by exactly the model's groups. Only unnamed scalar standard deviations are recycled.
 Different terms' respondent variables and coefficient deviations are independent within group.
 
-With a fixed coefficient, a one-unit increase in a profile's score changes its log-odds of being
+With a fixed coefficient, a one-unit increase in a profile's score (one rank step for
+\code{\link[=term_score]{term_score()}}) changes its log-odds of being
 chosen by \code{coef}, holding the other profile and scores fixed. If the profiles otherwise have equal
 utility, a one-unit score advantage gives choice probability \code{plogis(coef)}: for example,
 \code{plogis(0.4)} is about 0.60. This conditional choice probability is not an AMCE, which averages

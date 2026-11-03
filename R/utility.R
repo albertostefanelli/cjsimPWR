@@ -9,7 +9,10 @@
 #'   term, otherwise one unnamed scalar. A named list supplies separate values for each group.
 #' @param coef_sd coefficient standard deviations, with the same shape as `coef`. An unnamed scalar
 #'   may be repeated across a dummy term's coefficients. The default is zero.
-#' @param scores finite, nonconstant fixed scores for all levels, including the reference.
+#' @param scores finite, nonconstant fixed numbers for all levels, including the reference.
+#'   `term_score()` replaces them by their ranks (1 = lowest; equal numbers share a rank), so every
+#'   step between adjacent distinct values counts the same; [utility_model()] warns when this changes
+#'   the differences between levels. `coef` is then the utility change per rank step.
 #' @param share probabilities of matching each level, including the reference. Their sum must not
 #'   exceed one (apart from roundoff of at most `1e-12`, which is normalized). The remaining probability
 #'   means no match. A respondent matches at most one level.
@@ -21,7 +24,8 @@
 #'   list named by exactly the model's groups. Only unnamed scalar standard deviations are recycled.
 #'   Different terms' respondent variables and coefficient deviations are independent within group.
 #'
-#'   With a fixed coefficient, a one-unit increase in a profile's score changes its log-odds of being
+#'   With a fixed coefficient, a one-unit increase in a profile's score (one rank step for
+#'   [term_score()]) changes its log-odds of being
 #'   chosen by `coef`, holding the other profile and scores fixed. If the profiles otherwise have equal
 #'   utility, a one-unit score advantage gives choice probability `plogis(coef)`: for example,
 #'   `plogis(0.4)` is about 0.60. This conditional choice probability is not an AMCE, which averages
@@ -50,8 +54,52 @@ term_dummy <- function(attribute, coef, coef_sd = 0) {
 #' @rdname term_dummy
 #' @export
 term_score <- function(attribute, scores, coef, coef_sd = 0) {
-  structure(list(type = "score", attribute = attribute, scores = scores, coef = coef,
-                 coef_sd = coef_sd), class = "cj_utility_term")
+  ranked <- rank_scores(scores)
+  structure(list(type = "score", attribute = attribute, scores = ranked$scores, coef = coef,
+                 coef_sd = coef_sd, rank_changes = ranked$changes), class = "cj_utility_term")
+}
+
+# Replace scores by their dense ranks (1 = lowest), so every step between adjacent distinct values
+# counts the same. Record when this changes the differences between levels, not when it only shifts
+# them; utility_model() warns once the model is built. Inputs that utility_model() will reject are
+# returned unchanged so that it reports the error.
+rank_scores <- function(scores) {
+  rank_one <- function(x) {
+    if (!is.numeric(x) || !is.null(dim(x)) || !length(x) || any(!is.finite(x))) {
+      return(list(value = x, changed = NULL))
+    }
+    values <- sort(unique(as.numeric(x)))
+    ranks <- as.numeric(match(as.numeric(x), values))
+    names(ranks) <- names(x)
+    changed <- length(values) > 1L && any(abs(diff(values) - 1) > 1e-8)
+    list(value = ranks, changed = if (changed) paste(format_score(values), "->", seq_along(values),
+                                                      collapse = ", "))
+  }
+  # Match the named group lists accepted by latent_numeric_input(), including data frames.
+  if (is.list(scores)) {
+    ranked <- lapply(scores, rank_one)
+    value <- lapply(ranked, `[[`, "value")
+    changed <- lapply(ranked, `[[`, "changed")
+    keep <- !vapply(changed, is.null, logical(1))
+    labels <- if (is.null(names(scores))) seq_along(scores) else names(scores)
+    detail <- paste0("group ", labels[keep], ": ", unlist(changed[keep]), collapse = "; ")
+  } else {
+    ranked <- rank_one(scores)
+    value <- ranked$value
+    keep <- !is.null(ranked$changed)
+    detail <- ranked$changed
+  }
+  list(scores = value, changes = if (any(keep)) detail)
+}
+
+format_score <- function(x) vapply(x, function(v) format(v, digits = 7), character(1))
+
+warn_ranked_scores <- function(terms) {
+  for (term in terms) if (identical(term$type, "score") && !is.null(term$rank_changes)) {
+    warning("term_score(\"", term$attribute, "\"): `scores` were replaced by their ranks (1 = lowest), ",
+            "so each step between adjacent levels counts the same: ", term$rank_changes,
+            ". `coef` is the utility change per rank step.", call. = FALSE)
+  }
 }
 
 #' @rdname term_dummy
@@ -120,13 +168,13 @@ term_rating <- function(attribute, mean, sd, coef, coef_sd = 0) {
 #' @md
 #' @examples
 #' design <- conjoint_design(list(quality = c("low", "high"), democracy = c("D+", "D-")))
-#' model <- utility_model(design, list(term_score("quality", c(0, 2), 0.3),
+#' model <- utility_model(design, list(term_score("quality", c(1, 2), 0.3),
 #'                                     term_dummy("democracy", -0.8)))
 #' model$truth
 #'
 #' # A small integration budget keeps this heterogeneous example quick.
 #' # Inspect reference_half_width before using exploratory truths for bias or coverage.
-#' mixed <- utility_model(design, list(term_score("quality", c(0, 2), 0.3, coef_sd = 0.1),
+#' mixed <- utility_model(design, list(term_score("quality", c(1, 2), 0.3, coef_sd = 0.1),
 #'                                     term_dummy("democracy", -0.8, coef_sd = 0.2)),
 #'                        control = list(paired_cells = 8192))
 #' mixed
@@ -142,6 +190,9 @@ utility_model <- function(design, terms, groups = NULL, amce = FALSE, control = 
   model$diagnostics <- result$diagnostics
   if (is.null(model$diagnostics$population_gram)) model$diagnostics$population_gram <- gram
   class(model) <- "cj_dgp"
+  # Warn about ranked scores only once the model is built, so that an invalid model reports its
+  # error without a warning, even under options(warn = 2).
+  warn_ranked_scores(terms)
   model
 }
 

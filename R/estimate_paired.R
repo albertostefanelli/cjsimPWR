@@ -579,7 +579,7 @@ paired_covariance <- function(blocks, C, eligible, n, G, k, scale, vcov, inferen
 #' @export
 #' @examples
 #' design <- conjoint_design(list(quality = c("low", "high"), democracy = c("D+", "D-")))
-#' model <- utility_model(design, list(term_score("quality", c(0, 2), .3),
+#' model <- utility_model(design, list(term_score("quality", c(1, 2), .3),
 #'                                     term_dummy("democracy", -.8)))
 #' set.seed(1)
 #' data <- simulate_experiment(design, units = 100, n_tasks = 3, model = model)

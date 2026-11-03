@@ -1,5 +1,9 @@
 # cjsimPWR 0.4.0
 
+* `term_score()` replaces its `scores` by their ranks (1 = lowest; equal numbers share a rank), so each
+  step between adjacent levels counts the same and `coef` is the utility change per rank step.
+  `utility_model()` warns when ranking changes the differences between levels. Simulated score
+  columns hold the ranks.
 * `estimate_amce()` and `estimate_paired()` now explain omitted `design` or `data` arguments and name
   missing or duplicate columns, malformed attribute columns, and missing or invalid selected paired
   score columns. Paired outcome errors suggest checking outcome coding and profile pairing.
