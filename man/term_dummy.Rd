@@ -2,14 +2,14 @@
 % Please edit documentation in R/utility.R
 \name{term_dummy}
 \alias{term_dummy}
-\alias{term_score}
+\alias{term_rank}
 \alias{term_match}
 \alias{term_rating}
 \title{Latent utility terms}
 \usage{
 term_dummy(attribute, coef, coef_sd = 0)
 
-term_score(attribute, scores, coef, coef_sd = 0)
+term_rank(attribute, scores, coef, coef_sd = 0)
 
 term_match(attribute, share, coef, coef_sd = 0)
 
@@ -25,7 +25,7 @@ term, otherwise one unnamed scalar. A named list supplies separate values for ea
 may be repeated across a dummy term's coefficients. The default is zero.}
 
 \item{scores}{finite, nonconstant fixed numbers for all levels, including the reference.
-\code{term_score()} replaces them by their ranks (1 = lowest; equal numbers share a rank), so every
+\code{term_rank()} replaces them by their ranks (1 = lowest; equal numbers share a rank), so every
 step between adjacent distinct values counts the same; \code{\link[=utility_model]{utility_model()}} warns when this changes
 the differences between levels. \code{coef} is then the utility change per rank step.}
 
@@ -51,7 +51,7 @@ list named by exactly the model's groups. Only unnamed scalar standard deviation
 Different terms' respondent variables and coefficient deviations are independent within group.
 
 With a fixed coefficient, a one-unit increase in a profile's score (one rank step for
-\code{\link[=term_score]{term_score()}}) changes its log-odds of being
+\code{\link[=term_rank]{term_rank()}}) changes its log-odds of being
 chosen by \code{coef}, holding the other profile and scores fixed. If the profiles otherwise have equal
 utility, a one-unit score advantage gives choice probability \code{plogis(coef)}: for example,
 \code{plogis(0.4)} is about 0.60. This conditional choice probability is not an AMCE, which averages
@@ -65,7 +65,7 @@ utility when its coefficient is positive.
 }
 \examples{
 term_dummy("democracy", coef = -0.8, coef_sd = 0.3)
-term_score("quality", scores = c(0, 1, 2), coef = 0.4)
+term_rank("quality", scores = c(0, 1, 2), coef = 0.4)
 term_match("party", share = c(0.4, 0.3, 0.2), coef = 0.9)
 term_rating("policy", mean = c(4, 6), sd = 2, coef = 0.4)
 }

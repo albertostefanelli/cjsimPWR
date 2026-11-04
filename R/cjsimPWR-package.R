@@ -3,7 +3,7 @@
 #' [conjoint_design()] to describe the attributes, [simulate_experiment()] to draw one experiment,
 #' [estimate_amce()] to analyse it, and [summarise_runs()] to summarise estimates from repeated
 #' experiments.
-#' Use [utility_model()] with [term_dummy()], [term_score()], [term_match()] or [term_rating()]
+#' Use [utility_model()] with [term_dummy()], [term_rank()], [term_match()] or [term_rating()]
 #' to specify latent preferences directly, and [estimate_paired()] for paired-logit inference.
 #'
 #' Full explanations live in the package guides, online:

@@ -9,7 +9,7 @@ utility_model(design, terms, groups = NULL, amce = FALSE, control = list())
 \arguments{
 \item{design}{a \code{cj_design} from \code{\link[=conjoint_design]{conjoint_design()}}.}
 
-\item{terms}{nonempty list of terms from \code{\link[=term_dummy]{term_dummy()}}, \code{\link[=term_score]{term_score()}}, \code{\link[=term_match]{term_match()}} or
+\item{terms}{nonempty list of terms from \code{\link[=term_dummy]{term_dummy()}}, \code{\link[=term_rank]{term_rank()}}, \code{\link[=term_match]{term_match()}} or
 \code{\link[=term_rating]{term_rating()}}. Every attribute needs at least one term and at most one dummy term. Unnamed
 terms use the attribute name for dummies and \code{attribute_score}, \code{attribute_match} or
 \code{attribute_rating} otherwise. List names may override non-dummy names; they must be unique and
@@ -61,13 +61,13 @@ its default paired analysis and any cached AMCEs.
 }
 \examples{
 design <- conjoint_design(list(quality = c("low", "high"), democracy = c("D+", "D-")))
-model <- utility_model(design, list(term_score("quality", c(1, 2), 0.3),
+model <- utility_model(design, list(term_rank("quality", c(1, 2), 0.3),
                                     term_dummy("democracy", -0.8)))
 model$truth
 
 # A small integration budget keeps this heterogeneous example quick.
 # Inspect reference_half_width before using exploratory truths for bias or coverage.
-mixed <- utility_model(design, list(term_score("quality", c(1, 2), 0.3, coef_sd = 0.1),
+mixed <- utility_model(design, list(term_rank("quality", c(1, 2), 0.3, coef_sd = 0.1),
                                     term_dummy("democracy", -0.8, coef_sd = 0.2)),
                        control = list(paired_cells = 8192))
 mixed

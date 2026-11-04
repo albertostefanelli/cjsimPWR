@@ -14,7 +14,7 @@ attribute is its reference level. Attributes keep the order given; the number of
 determined by \code{levels}.
 All attributes have finite, discrete levels. Numeric labels supplied in a list, such as
 \code{list(price = c(10, 20, 30))}, are categories, not a continuously randomized attribute. Use
-\code{\link[=term_score]{term_score()}} in \code{\link[=utility_model]{utility_model()}} to give these levels utility scores; it ranks the numbers,
+\code{\link[=term_rank]{term_rank()}} in \code{\link[=utility_model]{utility_model()}} to give these levels utility scores; it ranks the numbers,
 so each step between adjacent levels counts the same. AMCE output still compares each level with
 the reference.
 

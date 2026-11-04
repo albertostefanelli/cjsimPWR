@@ -15,7 +15,7 @@ Simulation-based power analysis for paired, forced-choice conjoint experiments t
 \code{\link[=conjoint_design]{conjoint_design()}} to describe the attributes, \code{\link[=simulate_experiment]{simulate_experiment()}} to draw one experiment,
 \code{\link[=estimate_amce]{estimate_amce()}} to analyse it, and \code{\link[=summarise_runs]{summarise_runs()}} to summarise estimates from repeated
 experiments.
-Use \code{\link[=utility_model]{utility_model()}} with \code{\link[=term_dummy]{term_dummy()}}, \code{\link[=term_score]{term_score()}}, \code{\link[=term_match]{term_match()}} or \code{\link[=term_rating]{term_rating()}}
+Use \code{\link[=utility_model]{utility_model()}} with \code{\link[=term_dummy]{term_dummy()}}, \code{\link[=term_rank]{term_rank()}}, \code{\link[=term_match]{term_match()}} or \code{\link[=term_rating]{term_rating()}}
 to specify latent preferences directly, and \code{\link[=estimate_paired]{estimate_paired()}} for paired-logit inference.
 
 Full explanations live in the package guides, online:

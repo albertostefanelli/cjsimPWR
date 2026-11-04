@@ -42,7 +42,7 @@ Each attribute-level gets a utility term. A profile's utility is the sum of what
 | Term | Score of a profile |
 | --- | --- |
 | `term_dummy()` | 1 for the non-reference level shown, 0 otherwise; one `coef` per non-reference level |
-| `term_score()` | The rank of the level's number in `scores` (1 = lowest); `coef` is the utility change per rank step |
+| `term_rank()` | The rank of the level's number in `scores` (1 = lowest); `coef` is the utility change per rank step |
 | `term_match()` | 1 when the level is the respondent's own, 0 otherwise; `share` gives the proportion of respondents matching each level |
 | `term_rating()` | The respondent's own rating of the level, drawn from a normal distribution with `mean` and `sd` |
 
@@ -53,20 +53,20 @@ In the example below:
 - `policy`: every respondent has their own rating of each policy. Ratings of `left` average 6 with an `sd` of 2; `centre` averages 5 and `right` 4. A profile adds 0.05 for every rating point.
 - `party`: 40 percent of respondents belong to party A, 30 percent to B and 20 percent to C; the remaining 10 percent belong to none. A profile from the respondent's own party adds 0.4.
 - `democracy`: a candidate who does not comply with democratic norms (`D-`) loses 0.3, compared with `D+` (the reference level).
-- `record`: `term_score()` uses dense ranks so each step between adjacent levels counts the same. Each step towards higher unemployment lowers utility by 0.1.
+- `record`: `term_rank()` uses dense ranks so each step between adjacent levels counts the same. Each step towards higher unemployment lowers utility by 0.1.
 
 ```r
 model <- utility_model(design, terms = list(
   term_rating("policy", mean = c(6, 5, 4), sd = c(2, 1.5, 2), coef = 0.05),
   term_match("party", share = c(0.4, 0.3, 0.2), coef = 0.4),
   term_dummy("democracy", coef = -0.3),
-  term_score("record", scores = c(-5, -2.5, 2.5, 5), coef = -0.1)))
+  term_rank("record", scores = c(-5, -2.5, 2.5, 5), coef = -0.1)))
 model
 ```
 
 ```text
 Warning message:
-term_score("record"): `scores` were replaced by their ranks (1 = lowest), so each step between adjacent levels counts the same: -5 -> 1, -2.5 -> 2, 2.5 -> 3, 5 -> 4. `coef` is the utility change per rank step.
+term_rank("record"): `scores` were replaced by their ranks (1 = lowest), so each step between adjacent levels counts the same: -5 -> 1, -2.5 -> 2, 2.5 -> 3, 5 -> 4. `coef` is the utility change per rank step.
 Latent utility model (logit)
 Attributes (reference level first): policy [left, centre, right]; party [A, B, C]; democracy [D+, D-]; record [-5, -2.5, +2.5, +5]
 Groups: ungrouped
@@ -233,7 +233,7 @@ mixed <- utility_model(design, terms = list(
   term_rating("policy", mean = c(6, 5, 4), sd = c(2, 1.5, 2), coef = 0.05, coef_sd = 0.03),
   term_match("party", share = c(0.4, 0.3, 0.2), coef = 0.4),
   term_dummy("democracy", coef = -0.3, coef_sd = 0.3),
-  term_score("record", scores = c(-5, -2.5, 2.5, 5), coef = -0.1)),
+  term_rank("record", scores = c(-5, -2.5, 2.5, 5), coef = -0.1)),
   control = list(paired_cells = 131072))
 print(mixed$truth[c("term", "input", "true_value", "reference_half_width")], digits = 3)
 ```
@@ -259,7 +259,7 @@ partisans <- utility_model(design, groups = c("weak", "strong"), terms = list(
   term_rating("policy", mean = c(6, 5, 4), sd = c(2, 1.5, 2), coef = 0.05),
   term_match("party", share = c(0.4, 0.35, 0.25), coef = list(weak = 0.2, strong = 0.6)),
   term_dummy("democracy", coef = -0.3),
-  term_score("record", scores = c(-5, -2.5, 2.5, 5), coef = -0.1)))
+  term_rank("record", scores = c(-5, -2.5, 2.5, 5), coef = -0.1)))
 print(partisans$truth[c("group", "term", "true_value", "null")], digits = 3)
 ```
 

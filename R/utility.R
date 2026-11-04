@@ -10,7 +10,7 @@
 #' @param coef_sd coefficient standard deviations, with the same shape as `coef`. An unnamed scalar
 #'   may be repeated across a dummy term's coefficients. The default is zero.
 #' @param scores finite, nonconstant fixed numbers for all levels, including the reference.
-#'   `term_score()` replaces them by their ranks (1 = lowest; equal numbers share a rank), so every
+#'   `term_rank()` replaces them by their ranks (1 = lowest; equal numbers share a rank), so every
 #'   step between adjacent distinct values counts the same; [utility_model()] warns when this changes
 #'   the differences between levels. `coef` is then the utility change per rank step.
 #' @param share probabilities of matching each level, including the reference. Their sum must not
@@ -25,7 +25,7 @@
 #'   Different terms' respondent variables and coefficient deviations are independent within group.
 #'
 #'   With a fixed coefficient, a one-unit increase in a profile's score (one rank step for
-#'   [term_score()]) changes its log-odds of being
+#'   [term_rank()]) changes its log-odds of being
 #'   chosen by `coef`, holding the other profile and scores fixed. If the profiles otherwise have equal
 #'   utility, a one-unit score advantage gives choice probability `plogis(coef)`: for example,
 #'   `plogis(0.4)` is about 0.60. This conditional choice probability is not an AMCE, which averages
@@ -43,7 +43,7 @@
 #' @md
 #' @examples
 #' term_dummy("democracy", coef = -0.8, coef_sd = 0.3)
-#' term_score("quality", scores = c(0, 1, 2), coef = 0.4)
+#' term_rank("quality", scores = c(0, 1, 2), coef = 0.4)
 #' term_match("party", share = c(0.4, 0.3, 0.2), coef = 0.9)
 #' term_rating("policy", mean = c(4, 6), sd = 2, coef = 0.4)
 term_dummy <- function(attribute, coef, coef_sd = 0) {
@@ -53,7 +53,7 @@ term_dummy <- function(attribute, coef, coef_sd = 0) {
 
 #' @rdname term_dummy
 #' @export
-term_score <- function(attribute, scores, coef, coef_sd = 0) {
+term_rank <- function(attribute, scores, coef, coef_sd = 0) {
   ranked <- rank_scores(scores)
   structure(list(type = "score", attribute = attribute, scores = ranked$scores, coef = coef,
                  coef_sd = coef_sd, rank_changes = ranked$changes), class = "cj_utility_term")
@@ -96,7 +96,7 @@ format_score <- function(x) vapply(x, function(v) format(v, digits = 7), charact
 
 warn_ranked_scores <- function(terms) {
   for (term in terms) if (identical(term$type, "score") && !is.null(term$rank_changes)) {
-    warning("term_score(\"", term$attribute, "\"): `scores` were replaced by their ranks (1 = lowest), ",
+    warning("term_rank(\"", term$attribute, "\"): `scores` were replaced by their ranks (1 = lowest), ",
             "so each step between adjacent levels counts the same: ", term$rank_changes,
             ". `coef` is the utility change per rank step.", call. = FALSE)
   }
@@ -127,7 +127,7 @@ term_rating <- function(attribute, mean, sd, coef, coef_sd = 0) {
 #' `control$paired_cells` gives a faster exploratory calculation with less precise population targets.
 #'
 #' @param design a `cj_design` from [conjoint_design()].
-#' @param terms nonempty list of terms from [term_dummy()], [term_score()], [term_match()] or
+#' @param terms nonempty list of terms from [term_dummy()], [term_rank()], [term_match()] or
 #'   [term_rating()]. Every attribute needs at least one term and at most one dummy term. Unnamed
 #'   terms use the attribute name for dummies and `attribute_score`, `attribute_match` or
 #'   `attribute_rating` otherwise. List names may override non-dummy names; they must be unique and
@@ -168,13 +168,13 @@ term_rating <- function(attribute, mean, sd, coef, coef_sd = 0) {
 #' @md
 #' @examples
 #' design <- conjoint_design(list(quality = c("low", "high"), democracy = c("D+", "D-")))
-#' model <- utility_model(design, list(term_score("quality", c(1, 2), 0.3),
+#' model <- utility_model(design, list(term_rank("quality", c(1, 2), 0.3),
 #'                                     term_dummy("democracy", -0.8)))
 #' model$truth
 #'
 #' # A small integration budget keeps this heterogeneous example quick.
 #' # Inspect reference_half_width before using exploratory truths for bias or coverage.
-#' mixed <- utility_model(design, list(term_score("quality", c(1, 2), 0.3, coef_sd = 0.1),
+#' mixed <- utility_model(design, list(term_rank("quality", c(1, 2), 0.3, coef_sd = 0.1),
 #'                                     term_dummy("democracy", -0.8, coef_sd = 0.2)),
 #'                        control = list(paired_cells = 8192))
 #' mixed
