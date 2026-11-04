@@ -2,11 +2,12 @@
 
 ## Why a paired logit
 
-The paired logit in `cjsimPWR` is the conditional logit of discrete choice (McFadden 1974; Train 2009) applied to tasks with two profiles.[^polsci] Compared with AMCE regression, it offers three useful features.
+The paired logit in `cjsimPWR` is the conditional logit of discrete choice (McFadden 1974; Train 2009) applied to tasks with two profiles.[^polsci] Compared with AMCE regression, it has two useful features.
 
-- It can easily include characteristics of the respondent that relate to the profile. A term can record whether a level is the respondent's own or how the respondent rates it, so the same level can be an advantage for one respondent and a disadvantage for another.
-- When respondents' characteristics are included, it can pool information about a shared preference across respondent groups and, thus, increase precision. For instance, to assess whether respondents reward candidates from their own party, subgroup AMCE analysis estimates every party's AMCE within each group of partisans. A match term instead estimates one coefficient, the value of a candidate from the respondent's own party, from all respondents.
+- It can easily include characteristics of the respondent that relate to the profile such that a term can record whether a level is the respondent's own or how the respondent rates it. In this way the same level can be an advantage for one respondent and a disadvantage for another.[^precision]
 - Its coefficients do not have the design-imposed bounds of AMCEs, which are changes in choice probability. This is useful when ratios of coefficients are used to express trade-offs in the units of the corresponding terms.[^design]
+
+[^precision]: When matching experimental attributes to respondents' characteristics, we gain precision by pooling across respondent groups. For instance, to assess whether respondents reward candidates from their own party, subgroup AMCE analysis usually estimates every party's AMCE within each group of partisans. A match term instead estimates one coefficient, the value of a candidate from the respondent's own party, from all respondents.
 
 [^design]: A common rescaling of all utility coefficients cancels in their ratio (Train 2009, sec. 2.5.2). A ratio of pooled coefficients is not generally the average of respondents' trade-offs; see [Heterogeneous coefficients](#heterogeneous-coefficients).
 
@@ -30,11 +31,11 @@ design <- conjoint_design(list(
 - `policy`: the candidate's policy position (`left`, `centre`, `right`).
 - `party`: the candidate's affiliation (`A`, `B`, `C` are generic party labels).
 - `democracy`: whether the candidate respects democratic rules (`D+`) or violates them (`D-`).
-- `record`: the change in the unemployment rate during the candidate's time in office (−5, −2.5, +2.5 or +5 percentage points). Negative values mean a fall in unemployment; −5 is the reference level.
+- `record`: the change in the unemployment rate during the candidate's time in office. Negative values mean a fall in unemployment. 
 
 ## Utility terms
 
-Each attribute gets a term that says what a profile receives for it. A profile's utility is the sum of what it receives from all terms, and in each task the profile with the higher utility is the more likely to be chosen.[^logit] `coef` is the weight of a term, what one unit of its score adds to utility. Zero means the attribute does not matter, and a negative value counts against the profile.
+Each attribute-level gets a utility term. A profile's utility is the sum of what it receives from all terms. In each task the profile with the higher utility is the more likely to be chosen.[^logit] `coef` is the (utility) weight of a term, what one unit of its score adds to utility. Zero means the attribute does not matter. 
 
 [^logit]: Profile 1 is chosen with probability `plogis(U1 - U2)`, the logistic function of the utility difference. This is the choice model of the [simulation model guide](simulation_model.md#choice-model), and the reason the analysis is called a paired logit.
 
@@ -45,14 +46,14 @@ Each attribute gets a term that says what a profile receives for it. A profile's
 | `term_match()` | 1 when the level is the respondent's own, 0 otherwise; `share` gives the proportion of respondents matching each level |
 | `term_rating()` | The respondent's own rating of the level, drawn from a normal distribution with `mean` and `sd` |
 
-A respondent keeps the same ratings, party and coefficients in every task. Terms always go inside `list()`, even a single one. Every attribute needs a term. For an attribute that respondents see but that does not affect their choices, use `term_dummy("x", coef = 0)`: it stays in the experiment and the analysis, its target is exactly zero, and `power_sim()` reports its Type I error rather than power. Group-specific values are shown under [Groups](#groups).
+A respondent keeps the same ratings, party and coefficients in every task. Terms always go inside `list()`, even a single one. Every attribute needs a term. For an attribute that respondents see but that does not affect their choices, use `term_dummy("x", coef = 0)`. This reports its Type I error rather than power. 
 
 In the example below:
 
-- `policy`: every respondent has their own rating of each position. Ratings of `left` average 6 with an `sd` of 2, so about two thirds of respondents rate it between 4 and 8; `centre` averages 5 and `right` 4. A profile adds 0.05 for every rating point.
+- `policy`: every respondent has their own rating of each policy. Ratings of `left` average 6 with an `sd` of 2; `centre` averages 5 and `right` 4. A profile adds 0.05 for every rating point.
 - `party`: 40 percent of respondents belong to party A, 30 percent to B and 20 percent to C; the remaining 10 percent belong to none. A profile from the respondent's own party adds 0.4.
-- `democracy`: a candidate who does not comply with democratic norms (`D-`) loses 0.3, compared with `D+`, the reference level.
-- `record`: `term_score()` ranks the unemployment changes, so −5, −2.5, +2.5 and +5 get scores 1 to 4 and each step between adjacent levels counts the same. Because the changes are not equally spaced, `utility_model()` warns that they were replaced by their ranks. With `coef = -0.1`, each step towards higher unemployment lowers utility by 0.1. This is a valence attribute: everyone prefers lower unemployment in this model. The scores are shared across respondents, and one coefficient imposes the same effect for every step. Use `term_dummy()` instead for separate effects at each level relative to −5.
+- `democracy`: a candidate who does not comply with democratic norms (`D-`) loses 0.3, compared with `D+` (the reference level).
+- `record`: `term_score()` uses dense ranks so each step between adjacent levels counts the same. Each step towards higher unemployment lowers utility by 0.1.
 
 ```r
 model <- utility_model(design, terms = list(
@@ -86,7 +87,7 @@ Population targets:
 See $truth for full targets and precision, $parameters for coefficients, and $diagnostics for numerical details.
 ```
 
-In the population targets, `input` is the coefficient you supplied and `true_value` what the analysis recovers with unlimited respondents. They are equal here; they differ when coefficients vary across respondents (see [Heterogeneous coefficients](#heterogeneous-coefficients)).
+In the population targets, `input` is the coefficient you supplied and `true_value` what the analysis recovers with unlimited respondents. They are equal here but differ when coefficients vary across respondents (see [Heterogeneous coefficients](#heterogeneous-coefficients)).
 
 ## Simulating and estimating one experiment
 
@@ -115,7 +116,7 @@ print(head(data[c("respondent", "task", "profile", "policy", "policy_rating",
 6          1    3       2 centre         7.985     A           0        D+   +2.5            3 1
 ```
 
-Each row is one profile, and `y` is 1 for the chosen one. Respondent 1 rates `left` 9.563 and `centre` 7.985 and belongs to party B. In their first task they chose the left candidate with a 5-point fall in unemployment over the centre candidate with a 2.5-point fall; both candidates belong to party B and respect democratic rules. The `record_score` column contains the rank of the unemployment change, from 1 for −5 to 4 for +5.
+Each row is one profile, and `y` is 1 for the chosen one. Respondent 1 rates `left` 9.563 and `centre` 7.985 and belongs to party B. In their first task they chose the left candidate with a 5-point fall in unemployment over the centre candidate with a 2.5-point fall; both candidates belong to party B and respect democratic rules. 
 
 `estimate_paired()` fits the paired logit. By default it uses all the model's terms and reports their coefficients:
 
@@ -132,10 +133,9 @@ print(fit[c("term", "estimate", "std.error")], digits = 3)
 4  record_score  -0.1360    0.0264
 ```
 
-
 ## Power
 
-`power_sim(model = )` simulates the experiment `sim_runs` times, fits the paired logit each time and reports the share of runs in which each coefficient is significant: its power. `estimators = "paired"` asks for the paired logit alone, on the latent scale.
+`power_sim(model = )` simulates the experiment `sim_runs` times and fits the paired logit each time. `estimators = "paired"` asks for the paired logit. 
 
 ```r
 latent <- power_sim(model = model,
@@ -161,7 +161,7 @@ Measures are conditional on runs with valid inference.
 
 As in an AMCE power analysis (`power_sim()` with `true_amce`), the result stores the inputs and the targets and reports one row per coefficient. The numbers in parentheses are Monte Carlo standard errors.
 
-- `Power`: the share of runs in which the coefficient is significant. A power of 1.000 (0.000) means every run rejected, not that rejection is certain.
+- `Power`: the share of runs in which the coefficient is significant.
 - `Type S`: the share of significant estimates with the wrong sign.
 - `Type M`: how much significant estimates exaggerate the true value on average (1.0 means not at all, 1.5 means 50 percent too large).
 - `Coverage`: how often the 95 percent confidence interval contained `true_value`; it should be near 0.95.
@@ -169,7 +169,7 @@ As in an AMCE power analysis (`power_sim()` with `true_amce`), the result stores
 
 ## Comparing with AMCE regression
 
-`estimators = c("amce", "paired")` runs ordinary AMCE regression and the paired logit on the same simulated experiments. Both are then reported on the probability scale, so that they estimate the same AMCEs. `power_sim()` prints a message to say so, and another reminding you that the policy, party and record rows compare levels, not rating or score points or the match coefficient.
+`estimators = c("amce", "paired")` runs ordinary AMCE regression and the paired logit on the same simulated experiments. Both are then reported on the probability scale, so that they are comparable. When the AMCE is requested, `power_sim()` prints a message to say that the policy, party and record rows compare levels, not rating or score points. 
 
 ```r
 both <- power_sim(model = model, units = 1000, n_tasks = 5,
@@ -226,7 +226,7 @@ print(do.call(rbind, rows), digits = 2)
 
 `coef_sd` lets a coefficient vary across respondents. With `coef = -0.3, coef_sd = 0.3`, each respondent's democracy coefficient is drawn from a normal distribution with mean −0.3 and SD 0.3, so about two thirds of respondents lie between −0.6 and 0.
 
-With varying coefficients, the population targets are computed by simulation, which takes minutes at the default precision. `control = list(paired_cells = 131072)` lowers the precision to finish in about ten seconds; use it to explore and the default for final numbers.
+With varying coefficients, the population targets are computed by simulation, which takes minutes at the default precision. `control = list(paired_cells = 131072)` lowers the precision to finish in about ten seconds. Use it to explore and the default for final numbers.
 
 ```r
 mixed <- utility_model(design, terms = list(
@@ -246,13 +246,13 @@ print(mixed$truth[c("term", "input", "true_value", "reference_half_width")], dig
 4  record_score -0.10    -0.0988             0.000338
 ```
 
-`true_value` now differs from `input`. The paired logit fits one coefficient to everyone's choices even if each respondent has their own coefficient. Choice probabilities flatten out as they approach 0 or 1. So respondents above the average coefficient gain less probability than respondents below it lose. The population as a whole then looks less responsive than the average respondent, and the single fitted coefficient comes out closer to zero. The party and record targets move too, although their coefficients are fixed, because the varying policy and democracy coefficients add noise to every choice.
+`true_value` now differs from `input`. The paired logit fits one coefficient to everyone's choices even if each respondent has their own coefficient. Choice probabilities flatten out as they approach 0 or 1. So respondents above the average coefficient gain less probability than respondents below it. The population as a whole then looks less responsive than the average respondent, and the single fitted coefficient comes out closer to zero. The party and record targets move too, although their coefficients are fixed, because the varying policy and democracy coefficients add noise to every choice.
 
 When `coef_sd` is used, you can create such a model once and reuse it. Its targets do not depend on `units`, `n_tasks` or the experiment `seed`.
 
 ## Groups
 
-`groups` names respondent groups. Inputs that differ between groups are given as lists named by group; the others are shared. Here strong partisans gain 0.6 from a candidate of their own party and weak partisans 0.2; every respondent belongs to a party, and the ratings and the other coefficients are the same in both groups.
+`groups` names respondent groups. Inputs that differ between groups are given as lists named by group. Here strong partisans gain 0.6 from a candidate of their own party and weak partisans 0.2. The ratings and the other coefficients are the same in both groups. `units` and `n_tasks` can be given per group: `units = c(weak = 300, strong = 300)` (not shown). 
 
 ```r
 partisans <- utility_model(design, groups = c("weak", "strong"), terms = list(
@@ -279,7 +279,7 @@ print(partisans$truth[c("group", "term", "true_value", "null")], digits = 3)
 12 strong - weak  record_score       0.00  TRUE
 ```
 
-The `strong - weak` rows are the differences between groups, which `power_sim()` also tests. The `party_match` difference, 0.4, is the extra reward strong partisans give a candidate of their own party, estimated from the candidates of all three parties at once. Three rows are marked `null = TRUE`: the package has proved from the inputs that they are exactly zero, because the groups share these coefficients. Such rows report `type_1_error`, the share of runs that wrongly find a difference, instead of power. `units` and `n_tasks` can be given per group: `units = c(weak = 300, strong = 300)`.
+The `strong - weak` rows are the differences between groups, which `power_sim()` also tests. The `party_match` difference, 0.4, is the extra reward strong partisans give a candidate of their own party, estimated from the candidates of all three parties at once. Three rows are marked `null = TRUE`. These are inputs that are exactly zero, because the groups share these coefficients. Such rows report `type_1_error`, the share of runs that wrongly find a difference, instead of power. 
 
 ## Technical appendix
 
@@ -293,13 +293,13 @@ $$
 
 Utility $U_{itj}$ sums, over terms $k$, the respondent's coefficient $\beta_{ik}$ times the profile's score $x_{itjk}$ on that term: a dummy, the rank of a fixed score, a match indicator or the respondent's rating. Coefficients and respondent scores are fixed across a respondent's tasks.
 
-**Estimator.** `estimate_paired()` fits a logit without intercept[^intercept] to the profile-1-minus-profile-2 differences of the scores. Positive coefficients favour profile 1. Standard errors are clustered by respondent: CR1 by default, CR2 (via `clubSandwich`) on the latent scale only. The probability scale projects the fitted choice probabilities onto the ordinary AMCE regression. With dummy terms for every attribute and nothing else, the probability estimates and their CR1 standard errors coincide with ordinary AMCE regression.
+**Estimator.** `estimate_paired()` fits a logit without an intercept[^intercept] to the profile-1-minus-profile-2 differences of the scores. Positive coefficients favour profile 1. Standard errors are clustered by respondent: CR1 by default, CR2 (via `clubSandwich`) on the latent scale only. The probability scale projects the fitted choice probabilities onto the ordinary AMCE regression. With dummy terms for every attribute and nothing else, the probability estimates and their CR1 standard errors coincide with ordinary AMCE regression.
 
-[^intercept]: Choice probabilities depend only on utility differences (Train 2009, sec. 2.5.1). When attributes are randomized, position is the only systematic difference between the two profiles, so the intercept is close to zero (odds of about 1) unless respondents favour a position, for example by choosing the profile shown first more often. Randomly swapping which profile is coded as profile 1 in each task, independently of where it was shown, removes this bias.
+[^intercept]: Choice probabilities depend only on utility differences (Train 2009, sec. 2.5.1). When attributes are randomized, position is the only systematic difference between the two profiles, so the intercept is close to zero (odds of about 1) unless respondents favour a position, for example by choosing the profile shown on the left side of the screen more often. Randomly swapping which profile is coded as profile 1 in each task, independently of where it was shown, removes this bias.
 
 **Targets.** A target is the value an analysis would recover with unlimited respondents; bias and coverage are measured against it. On the latent scale, the target equals the input coefficient unless:
 
-1. The analysis leaves out a generating term (see Custom analyses). Its utility joins the unobserved part, and logit coefficients are measured relative to that, so the remaining coefficients shrink towards zero by about the same factor (Train 2009, sec. 2.5.2).
+1. The analysis leaves out a generating term (see below, Custom analyses). Its utility joins the unobserved part, and logit coefficients are measured relative to that, so the remaining coefficients shrink towards zero by about the same factor (Train 2009, sec. 2.5.2).
 2. The analysis codes a term differently, for example party dummies when choices follow `term_match("party")`. The dummies then measure how many respondents belong to each party, not the own-party bonus.
 3. A coefficient varies across respondents (`coef_sd` above zero).
 
