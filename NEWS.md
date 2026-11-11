@@ -46,7 +46,13 @@
   when the caller's normal generator is `"Box-Muller"`. Its cached second draw cannot be restored
   after the package's private random-number stream; a separate R process was previously started to
   preserve it. Switch generators first, for example with `RNGkind(normal.kind = "Inversion")`.
-* Existing calibrated calls, returned objects and experiment streams are preserved. No new package
+* The deprecated `power_sim()` arguments `n_levels`, `group_name`, `true_coef`, `sigma.u_k` and
+  `n_attributes` are removed. Use `levels`, `groups`, `true_amce` and `sigma`; `n_attributes` has no
+  replacement, since `levels` determines the number of attributes.
+* The experimental `reference_margin` and `max_reference_batches` calibration controls and the
+  `reference_plan` diagnostic are removed. Default calibration, references and seeded results are
+  unchanged.
+* Apart from these removals, existing calibrated calls, results and experiment streams are preserved. No new package
   dependency is required. See `docs/paired_logit.md` for assumptions, scales and examples.
 
 # cjsimPWR 0.3.0

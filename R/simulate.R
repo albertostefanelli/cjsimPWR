@@ -31,8 +31,7 @@
 #'   `units` and `n_tasks` may differ from the original call.
 #'   A latent model from [utility_model()] additionally supplies one score column per non-dummy term.
 #' @param calibration_control optional named list of calibration settings; see the Calibration section
-#'   of [simulate_experiment()]. `reference_margin = 0.5` enables experimental precision planning;
-#'   its default of zero retains the original calibration and reference budgets.
+#'   of [simulate_experiment()].
 #'
 #' @section Calibration: The package solves for coefficients whose AMCEs approximate
 #'   `true_amce` (and, with `sigma > 0`, whose respondent-level AMCEs have SD `sigma`), then verifies the
@@ -78,18 +77,8 @@
 #'   | `verification_batches` | 16 | Integration: batches per verification attempt; also the minimum reference batch count. |
 #'   | `max_verification_batches` | 128 | Integration: batch cap for one verification attempt. |
 #'   | `max_attempts` | 4 | Integration: verification attempts allowed before calibration stops with an error. |
-#'   | `reference_margin` | 0 | Precision planning: see below. |
-#'   | `max_reference_batches` | 512 | Precision planning: cap on the final reference's batch count per group. |
 #'
-#'   **Precision planning (experimental).** `reference_margin` (`0 <= reference_margin < 1`) reserves
-#'   verification headroom and plans the final reference's batch count from the verification variances.
-#'   The default of 0 disables the option and retains the original calibration and reference budgets; a
-#'   positive value (suggested starting point 0.5) can increase calibration runtime or cause stricter
-#'   verification to fail. `max_reference_batches` caps the final budget per group.
-#'   `diagnostics[[g]]$reference_plan` reports `batches`, `cap_limited`, `predicted_precision_met` and
-#'   realised `precision_met`. A batch cap or a missed precision target alone does not raise a warning,
-#'   and meeting the target is not guaranteed. See the
-#'   [calibration guide](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/calibration.md)
+#'   See the [calibration guide](https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/calibration.md)
 #'   (online) for the full derivation and reading guide.
 #'
 #' @return A data frame with one row per profile and columns `group` (`NA` without groups), `respondent`

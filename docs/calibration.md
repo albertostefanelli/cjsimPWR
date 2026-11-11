@@ -197,14 +197,6 @@ times longer than the defaults, and calibration can take many minutes when `sigm
 sampled. `sim_runs`, the number of simulated experiments, does not help here: it makes power and Type I
 error estimates more precise, not the answer key of a given model.
 
-An experimental alternative, `reference_margin`, keeps some headroom during the check and then plans
-the size of the final measurement from the check's results, instead of you enlarging every sample by
-hand. It is off by default. Its full rules (allowed values, the `max_reference_batches` cap, effects on
-run time and failures, and the `reference_plan` diagnostic fields) are in the Calibration section of
-the `simulate_experiment()` help. This kind of planning is motivated by methods for fixed-width Monte
-Carlo confidence intervals ([Hickernell et al., 2013](https://doi.org/10.1007/978-3-642-41095-6_5)),
-which rest on additional assumptions about how much the samples vary.
-
 ## 5. Bounds and sensitivity
 
 How far can the generated effect be from your request? For any row with a requested AMCE, the `truth`
@@ -252,10 +244,6 @@ worker counts and repeated calls.
 
 ## References
 
-- Hickernell, F. J., Jiang, L., Liu, Y., & Owen, A. (2013). Guaranteed conservative fixed width
-  confidence intervals via Monte Carlo sampling. In *Monte Carlo and Quasi-Monte Carlo Methods 2012*
-  (pp. 105–128). Springer. [Paper](https://doi.org/10.1007/978-3-642-41095-6_5);
-  [author manuscript](https://arxiv.org/abs/1208.4318).
 - Naimi, A. I., Benkeser, D., & Rudolph, J. E. (2025). Computing true parameter values in simulation
   studies using Monte Carlo integration. *Epidemiology*, 36(5), 690–693.
   [Paper](https://doi.org/10.1097/EDE.0000000000001873).

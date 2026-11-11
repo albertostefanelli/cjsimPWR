@@ -21,11 +21,6 @@ power_sim(
   latent_sigma = NULL,
   calibration_control = list(),
   keep_runs = FALSE,
-  n_levels = NULL,
-  group_name = NULL,
-  true_coef = NULL,
-  sigma.u_k = NULL,
-  n_attributes = NULL,
   model = NULL,
   estimators = NULL,
   paired_terms = NULL,
@@ -101,24 +96,12 @@ small subgroups, even if the joint fit has many respondents.}
 coefficient scale. The implied AMCE SDs are reported in the model's \code{truth} table.}
 
 \item{calibration_control}{optional named list of calibration settings; see the Calibration section
-of \code{\link[=simulate_experiment]{simulate_experiment()}}. \code{reference_margin = 0.5} enables experimental precision planning;
-its default of zero retains the original calibration and reference budgets.}
+of \code{\link[=simulate_experiment]{simulate_experiment()}}.}
 
 \item{keep_runs}{Retain the estimates, inference and failure reasons from every run? Default FALSE.}
 
-\item{n_levels, group_name, true_coef}{Deprecated aliases for \code{levels}, \code{groups}, and \code{true_amce},
-kept for backward compatibility with a warning on use. \code{true_coef} is interpreted as AMCE targets
-for the calibrated logit model, not the score coefficients of versions up to 0.2.1.}
-
-\item{sigma.u_k}{Deprecated alias. In versions up to 0.2.1 it was the SD of respondent-level
-effects on the probability scale, so it is used as \code{sigma}. Profile pairs are always drawn
-independently now (see NEWS); this alias does not reproduce a 0.2.1 experiment's results exactly.}
-
-\item{n_attributes}{Deprecated attribute count, checked against \code{levels} when supplied. See NEWS
-for the full migration table covering every deprecated argument.}
-
 \item{model}{Optional prepared calibrated or latent \code{cj_dgp}. Its design and omitted groups are
-adopted. Omit all model-building arguments and deprecated aliases when supplying a model.}
+adopted. Omit all model-building arguments when supplying a model.}
 
 \item{estimators}{Unique nonempty subset of \code{c("amce", "paired")}. Defaults to AMCE for calibrated
 models and paired logit for models from \code{\link[=utility_model]{utility_model()}}. Paired power requires a latent model.}
@@ -211,10 +194,6 @@ An independent final reference, with a fixed budget chosen after calibration acc
 avoids selecting the reference estimate by the acceptance rule. Its MCSE is propagated into
 \code{bias_mcse}; coverage MCSE remains conditional on the reference, with sensitivity bounds supplied
 by \code{\link[=summarise_runs]{summarise_runs()}}. Increasing \code{sim_runs} does not reduce reference uncertainty.
-Optional \code{calibration_control = list(reference_margin = 0.5)} reserves calibration headroom and
-plans a capped final reference budget; see the Calibration section of \code{\link[=simulate_experiment]{simulate_experiment()}} for
-rules and diagnostics. This experimental option reduces inconclusive checks without guaranteeing
-confirmation.
 
 For approximate nulls, an internal check evaluates the excess rejection probability in an unbiased,
 known-SE normal test at the target error bound: \code{pnorm(-z - h) + pnorm(h - z) - alpha}, where
@@ -236,9 +215,10 @@ the call instead of producing a row.
 }
 
 \section{Compatibility}{
- Deprecated arguments and positional calls still work with a warning; migrate
-to the current named arguments (see NEWS for the full mapping). The return value is a list with a
-numeric performance table rather than formatted strings.
+ The arguments \code{n_levels}, \code{group_name}, \code{true_coef}, \code{sigma.u_k} and
+\code{n_attributes} of earlier versions have been removed; use \code{levels}, \code{groups}, \code{true_amce} and
+\code{sigma} (see NEWS). The return value is a list with a numeric performance table rather than
+formatted strings.
 }
 
 \examples{

@@ -15,7 +15,7 @@
 #'   at most `sim_runs` workers are started. No global future plan or options are changed.
 #' @param keep_runs Retain the estimates, inference and failure reasons from every run? Default FALSE.
 #' @param model Optional prepared calibrated or latent `cj_dgp`. Its design and omitted groups are
-#'   adopted. Omit all model-building arguments and deprecated aliases when supplying a model.
+#'   adopted. Omit all model-building arguments when supplying a model.
 #' @param estimators Unique nonempty subset of `c("amce", "paired")`. Defaults to AMCE for calibrated
 #'   models and paired logit for models from [utility_model()]. Paired power requires a latent model.
 #' @param paired_terms Attributes or generated score columns to include in the paired analysis.
@@ -24,15 +24,6 @@
 #' @param scale Paired reporting scale: `"latent"` or `"probability"`. Paired-only power defaults to
 #'   latent coefficients. Selecting both estimators requires probability scale and chooses it with
 #'   a message when omitted. Paired probability reporting supports CR1 only.
-#' @param n_levels,group_name,true_coef Deprecated aliases for `levels`, `groups`, and `true_amce`,
-#'   kept for backward compatibility with a warning on use. `true_coef` is interpreted as AMCE targets
-#'   for the calibrated logit model, not the score coefficients of versions up to 0.2.1.
-#' @param sigma.u_k Deprecated alias. In versions up to 0.2.1 it was the SD of respondent-level
-#'   effects on the probability scale, so it is used as `sigma`. Profile pairs are always drawn
-#'   independently now (see NEWS); this alias does not reproduce a 0.2.1 experiment's results exactly.
-#' @param n_attributes Deprecated attribute count, checked against `levels` when supplied. See NEWS
-#'   for the full migration table covering every deprecated argument.
-#'
 #' @section Reproducibility: Each experiment has its own L'Ecuyer-CMRG stream, so results are identical
 #'   across worker counts and the first runs remain unchanged when `sim_runs` increases. Calibration
 #'   has its own seed argument in `calibration_control`. Equal seed values can overlap calibration and
@@ -83,10 +74,6 @@
 #'   avoids selecting the reference estimate by the acceptance rule. Its MCSE is propagated into
 #'   `bias_mcse`; coverage MCSE remains conditional on the reference, with sensitivity bounds supplied
 #'   by [summarise_runs()]. Increasing `sim_runs` does not reduce reference uncertainty.
-#'   Optional `calibration_control = list(reference_margin = 0.5)` reserves calibration headroom and
-#'   plans a capped final reference budget; see the Calibration section of [simulate_experiment()] for
-#'   rules and diagnostics. This experimental option reduces inconclusive checks without guaranteeing
-#'   confirmation.
 #'
 #'   For approximate nulls, an internal check evaluates the excess rejection probability in an unbiased,
 #'   known-SE normal test at the target error bound: `pnorm(-z - h) + pnorm(h - z) - alpha`, where
@@ -104,9 +91,10 @@
 #'   specifications, unavailable CR2 dependencies, calibration failures and worker startup errors stop
 #'   the call instead of producing a row.
 #'
-#' @section Compatibility: Deprecated arguments and positional calls still work with a warning; migrate
-#'   to the current named arguments (see NEWS for the full mapping). The return value is a list with a
-#'   numeric performance table rather than formatted strings.
+#' @section Compatibility: The arguments `n_levels`, `group_name`, `true_coef`, `sigma.u_k` and
+#'   `n_attributes` of earlier versions have been removed; use `levels`, `groups`, `true_amce` and
+#'   `sigma` (see NEWS). The return value is a list with a numeric performance table rather than
+#'   formatted strings.
 #'
 #' @return A `cj_power` list with:
 #'   * `performance`: one row per effect, including effect identifiers, requested and true AMCEs,
@@ -145,48 +133,23 @@ power_sim <- function(levels = NULL, true_amce = NULL, units, n_tasks, groups = 
                       dgp = "logit",
                       alpha = 0.05, vcov = c("CR1", "CR2"), sim_runs = 1000, seed, cores = 1,
                       inference = NULL, latent_sigma = NULL, calibration_control = list(),
-                      keep_runs = FALSE, n_levels = NULL, group_name = NULL, true_coef = NULL,
-                      sigma.u_k = NULL, n_attributes = NULL,
-                      model = NULL, estimators = NULL, paired_terms = NULL, scale = NULL) {
+                      keep_runs = FALSE, model = NULL, estimators = NULL, paired_terms = NULL,
+                      scale = NULL) {
   if (!is.null(model)) {
     if (!inherits(model, "cj_dgp") || !identical(model$dgp, "logit")) {
       stop("`model` must be a prepared logit cj_dgp.", call. = FALSE)
     }
     if (!missing(levels) || !missing(true_amce) || !missing(sigma) || !missing(latent_sigma) ||
-        !missing(dgp) || !missing(calibration_control) || !missing(n_levels) ||
-        !missing(group_name) || !missing(true_coef) || !missing(sigma.u_k) || !missing(n_attributes)) {
-      stop("with a prepared `model`, omit levels, true_amce, sigma, latent_sigma, dgp, calibration_control and deprecated aliases.", call. = FALSE)
+        !missing(dgp) || !missing(calibration_control)) {
+      stop("with a prepared `model`, omit levels, true_amce, sigma, latent_sigma, dgp and calibration_control.",
+           call. = FALSE)
     }
     if (missing(groups)) groups <- model$groups
-    if (!identical(groups, model$groups)) stop("`groups` must match the prepared model's order.", call. = FALSE)
-  }
-  if (!missing(n_levels)) {
-    deprecated_power_arg("n_levels", "levels", !missing(levels))
-    levels <- n_levels
-  }
-  if (!missing(group_name)) {
-    deprecated_power_arg("group_name", "groups", !missing(groups))
-    groups <- group_name
-  }
-  if (!missing(true_coef)) {
-    deprecated_power_arg("true_coef", "true_amce", !missing(true_amce),
-      "Values are AMCE targets for the calibrated logit model, not the score coefficients of versions up to 0.2.1.")
-    true_amce <- true_coef
-  }
-  if (!missing(sigma.u_k)) {
-    conflict <- !missing(sigma) || !missing(latent_sigma)
-    # Both arguments denote the SD of respondent-level AMCEs on the probability scale.
-    deprecated_power_arg("sigma.u_k", "sigma", conflict,
-      "It is used as the SD of respondent-level AMCEs on the probability scale, as in versions up to 0.2.1.")
-    sigma <- sigma.u_k
-  }
-  design <- if (is.null(model)) conjoint_design(levels) else model$design
-  if (!missing(n_attributes)) {
-    deprecated_power_arg("n_attributes", "levels")
-    if (positive_count(n_attributes, "n_attributes") != length(design$levels)) {
-      stop("`n_attributes` must match the number of attributes in `levels`.", call. = FALSE)
+    if (!identical(groups, model$groups)) {
+      stop("`groups` must match the prepared model's order.", call. = FALSE)
     }
   }
+  design <- if (is.null(model)) conjoint_design(levels) else model$design
   groups <- check_groups(groups)
   units <- per_group(units, groups, "units")
   n_tasks <- per_group(n_tasks, groups, "n_tasks")
@@ -304,13 +267,6 @@ diagnose_nulls <- function(performance, alpha, approximate) {
     paste(which(material), collapse = ", "), ". Type I error is approximate; tighten calibration_control. ",
     "This normal-theory diagnostic is not a guarantee for clustered inference.", call. = FALSE)
   invisible(NULL)
-}
-
-deprecated_power_arg <- function(old, new, conflict = FALSE, note = "") {
-  if (conflict) stop("supply only one of `", old, "` and its replacement `", new, "`",
-                     if (old == "sigma.u_k") " (and no other heterogeneity argument)", ".", call. = FALSE)
-  warning("`", old, "` is deprecated; use `", new, "` instead.",
-          if (nzchar(note)) paste0(" ", note), call. = FALSE)
 }
 
 positive_count <- function(x, arg) {

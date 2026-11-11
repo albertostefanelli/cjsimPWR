@@ -56,8 +56,7 @@ Supply the same design and omit true_amce, sigma, dgp, latent_sigma and calibrat
 A latent model from \code{\link[=utility_model]{utility_model()}} additionally supplies one score column per non-dummy term.}
 
 \item{calibration_control}{optional named list of calibration settings; see the Calibration section
-of \code{\link[=simulate_experiment]{simulate_experiment()}}. \code{reference_margin = 0.5} enables experimental precision planning;
-its default of zero retains the original calibration and reference budgets.}
+of \code{\link[=simulate_experiment]{simulate_experiment()}}.}
 }
 \value{
 A data frame with one row per profile and columns \code{group} (\code{NA} without groups), \code{respondent}
@@ -128,20 +127,10 @@ also listed in \code{attr(data, "dgp")$control}):\tabular{lrl}{
    \code{verification_batches} \tab 16 \tab Integration: batches per verification attempt; also the minimum reference batch count. \cr
    \code{max_verification_batches} \tab 128 \tab Integration: batch cap for one verification attempt. \cr
    \code{max_attempts} \tab 4 \tab Integration: verification attempts allowed before calibration stops with an error. \cr
-   \code{reference_margin} \tab 0 \tab Precision planning: see below. \cr
-   \code{max_reference_batches} \tab 512 \tab Precision planning: cap on the final reference's batch count per group. \cr
 }
 
 
-\strong{Precision planning (experimental).} \code{reference_margin} (\verb{0 <= reference_margin < 1}) reserves
-verification headroom and plans the final reference's batch count from the verification variances.
-The default of 0 disables the option and retains the original calibration and reference budgets; a
-positive value (suggested starting point 0.5) can increase calibration runtime or cause stricter
-verification to fail. \code{max_reference_batches} caps the final budget per group.
-\code{diagnostics[[g]]$reference_plan} reports \code{batches}, \code{cap_limited}, \code{predicted_precision_met} and
-realised \code{precision_met}. A batch cap or a missed precision target alone does not raise a warning,
-and meeting the target is not guaranteed. See the
-\href{https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/calibration.md}{calibration guide}
+See the \href{https://github.com/albertostefanelli/cjsimPWR/blob/main/docs/calibration.md}{calibration guide}
 (online) for the full derivation and reading guide.
 }
 
