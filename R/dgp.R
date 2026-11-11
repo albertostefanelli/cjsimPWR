@@ -1,36 +1,28 @@
 # Reference calculations and calibration for paired, uniformly randomized profiles.
-# Restore the caller's RNG; equal calibration/experiment seeds can still share initial draws.
+# Evaluate `expr` on a private L'Ecuyer-CMRG stream, then restore the caller's RNG. Equal
+# calibration and experiment seeds can still share initial draws.
 with_reference_seed <- function(seed, expr) {
+  old_kind <- RNGkind()
+  # Box-Muller keeps its second normal draw outside .Random.seed, and switching generators discards
+  # it, so the caller's stream could not be restored exactly. Stop before touching anything.
+  if (old_kind[2] == "Box-Muller") {
+    stop("the \"Box-Muller\" normal generator is not supported, because its cached draw cannot be ",
+         "restored afterwards. Switch generators first, for example with ",
+         "RNGkind(normal.kind = \"Inversion\").", call. = FALSE)
+  }
   had_seed <- exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)
   if (had_seed) old_seed <- get(".Random.seed", envir = .GlobalEnv)
-  old_kind <- RNGkind()
-  preserve_normal_cache <- old_kind[2] == "Box-Muller"
   on.exit({
-    # Calling RNGkind() with arguments destroys Box-Muller's cached second deviate.
-    # Restoring the seed alone restores all three RNG kinds on the next RNG access.
-    if (!preserve_normal_cache || !had_seed) do.call(RNGkind, as.list(old_kind))
-    if (had_seed) assign(".Random.seed", old_seed, envir = .GlobalEnv)
-    else if (exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)) rm(".Random.seed", envir = .GlobalEnv)
+    do.call(RNGkind, as.list(old_kind))
+    if (had_seed) {
+      assign(".Random.seed", old_seed, envir = .GlobalEnv)
+    } else if (exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)) {
+      rm(".Random.seed", envir = .GlobalEnv)
+    }
   })
-  if (preserve_normal_cache) {
-    assign(".Random.seed", private_rng_seed(seed), envir = .GlobalEnv)
-  } else {
-    RNGkind("L'Ecuyer-CMRG", "Inversion", "Rejection")
-    set.seed(seed)
-  }
+  RNGkind("L'Ecuyer-CMRG", "Inversion", "Rejection")
+  set.seed(seed)
   force(expr)
-}
-
-# Only needed for callers using Box-Muller: even set.seed() under a different normal generator
-# clears its hidden cache. Seed in one short-lived process, then install the stream by assignment.
-private_rng_seed <- function(seed) {
-  cluster <- parallel::makePSOCKcluster(1L)
-  on.exit(parallel::stopCluster(cluster))
-  parallel::clusterCall(cluster, function(seed) {
-    RNGkind("L'Ecuyer-CMRG", "Inversion", "Rejection")
-    set.seed(seed)
-    get(".Random.seed", envir = .GlobalEnv)
-  }, seed)[[1]]
 }
 
 dgp_controls <- function(control = list()) {

@@ -47,7 +47,8 @@ group. Fixed coefficients with exactly matching analysis coding have paired targ
 input means. Under heterogeneity or a changed analysis, the paired target is a population logistic
 projection. AMCE truths are on the probability scale. A certified zero mean does not imply zero
 respondent-level variation. Truth calculations preserve the caller's random-number state and use
-reference streams separate from simulated experiments.
+reference streams separate from simulated experiments. They stop with an error under the
+\code{"Box-Muller"} normal generator; see the Reproducibility section of \code{\link[=power_sim]{power_sim()}}.
 
 \code{coef} describes how preferences generate choices; it is not a probability difference. In the truth
 table, \code{input} retains the specified coefficient mean when the analysis coding matches it, while

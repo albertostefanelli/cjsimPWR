@@ -37,7 +37,9 @@
 #'   across worker counts and the first runs remain unchanged when `sim_runs` increases. Calibration
 #'   has its own seed argument in `calibration_control`. Equal seed values can overlap calibration and
 #'   experiment draws; the final reference uses a fresh substream. The caller's random-number state,
-#'   including its normal-generator kind, is restored after the call.
+#'   including its normal-generator kind, is restored after the call. The `"Box-Muller"` normal
+#'   generator is not supported and stops the call with an error, because its cached second draw
+#'   could not be restored; switch first, for example with `RNGkind(normal.kind = "Inversion")`.
 #'   Latent truth calculations allocate separate reference substreams, including when their seed equals
 #'   the experiment seed. Changing estimators, analysis terms or truth caches leaves experiments unchanged.
 #'

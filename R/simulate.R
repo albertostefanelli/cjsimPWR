@@ -48,7 +48,8 @@
 #'   The wider exact eligibility in version 0.3.0 changes seeded results and calibration random-number
 #'   use for newly eligible designs; previously exact designs change only up to rounding.
 #'   Calibration uses its own random seed
-#'   (`calibration_control$seed`) and leaves the caller's random numbers unchanged.
+#'   (`calibration_control$seed`) and leaves the caller's random numbers unchanged. It stops with an
+#'   error under the `"Box-Muller"` normal generator; see the Reproducibility section of [power_sim()].
 #'
 #'   After acceptance, a fresh, independent reference — never retried or used to recalibrate — supplies
 #'   the true AMCEs, SDs and their Monte Carlo precision in `truth`. `diagnostics[[g]]$verification`

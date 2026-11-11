@@ -42,6 +42,10 @@
   unused levels, as after subsetting a data frame. Unused levels were counted as clusters, which
   made standard errors slightly too small and, with at least as many levels as profile rows,
   disabled clustering. Simulated data and `power_sim()` were not affected.
+* `power_sim()`, `utility_model()` and calibration in `simulate_experiment()` now stop with an error
+  when the caller's normal generator is `"Box-Muller"`. Its cached second draw cannot be restored
+  after the package's private random-number stream; a separate R process was previously started to
+  preserve it. Switch generators first, for example with `RNGkind(normal.kind = "Inversion")`.
 * Existing calibrated calls, returned objects and experiment streams are preserved. No new package
   dependency is required. See `docs/paired_logit.md` for assumptions, scales and examples.
 

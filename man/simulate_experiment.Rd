@@ -100,7 +100,8 @@ With heterogeneity, respondent coefficients still require Monte Carlo integratio
 The wider exact eligibility in version 0.3.0 changes seeded results and calibration random-number
 use for newly eligible designs; previously exact designs change only up to rounding.
 Calibration uses its own random seed
-(\code{calibration_control$seed}) and leaves the caller's random numbers unchanged.
+(\code{calibration_control$seed}) and leaves the caller's random numbers unchanged. It stops with an
+error under the \code{"Box-Muller"} normal generator; see the Reproducibility section of \code{\link[=power_sim]{power_sim()}}.
 
 After acceptance, a fresh, independent reference — never retried or used to recalibrate — supplies
 the true AMCEs, SDs and their Monte Carlo precision in \code{truth}. \code{diagnostics[[g]]$verification}

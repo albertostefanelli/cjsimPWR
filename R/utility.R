@@ -146,7 +146,8 @@ term_rating <- function(attribute, mean, sd, coef, coef_sd = 0) {
 #'   input means. Under heterogeneity or a changed analysis, the paired target is a population logistic
 #'   projection. AMCE truths are on the probability scale. A certified zero mean does not imply zero
 #'   respondent-level variation. Truth calculations preserve the caller's random-number state and use
-#'   reference streams separate from simulated experiments.
+#'   reference streams separate from simulated experiments. They stop with an error under the
+#'   `"Box-Muller"` normal generator; see the Reproducibility section of [power_sim()].
 #'
 #'   `coef` describes how preferences generate choices; it is not a probability difference. In the truth
 #'   table, `input` retains the specified coefficient mean when the analysis coding matches it, while
