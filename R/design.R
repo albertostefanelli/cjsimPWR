@@ -36,7 +36,8 @@ conjoint_design <- function(levels) {
 # Level labels of each attribute, named by attribute.
 design_levels <- function(levels) {
   if (is.numeric(levels)) {
-    if (length(levels) == 0 || anyNA(levels) || any(levels < 2) || any(levels != round(levels))) {
+    if (length(levels) == 0 || any(!is.finite(levels)) || any(levels < 2) ||
+        any(levels != round(levels))) {
       stop("`levels` must give a whole number of at least 2 levels for every attribute.", call. = FALSE)
     }
     labels <- lapply(levels, function(l) as.character(seq_len(l) - 1))

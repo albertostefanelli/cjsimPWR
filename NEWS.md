@@ -38,6 +38,10 @@
   Carlo standard errors stay correct at extreme magnitudes. Calibration with a `tolerance` below 1e-5
   now converges, fixed-coefficient utility models compute their AMCE targets much faster, and analytic
   Type M is 1 when all estimates are equal.
+* `estimate_amce()` with `vcov = "CR1"` now clusters correctly when `respondent` is a factor with
+  unused levels, as after subsetting a data frame. Unused levels were counted as clusters, which
+  made standard errors slightly too small and, with at least as many levels as profile rows,
+  disabled clustering. Simulated data and `power_sim()` were not affected.
 * Existing calibrated calls, returned objects and experiment streams are preserved. No new package
   dependency is required. See `docs/paired_logit.md` for assumptions, scales and examples.
 

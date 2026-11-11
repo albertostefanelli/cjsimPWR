@@ -152,9 +152,10 @@ estimate_amce <- function(data, design, groups = NULL, vcov = c("CR1", "CR2"),
       # G/(G - 1) from cadjust and (n - 1)/(n - k) from HC1: the CR1S estimator, as in cjoint and Stata.
       cov_result <- tryCatch({
         model <- stats::lm(y ~ . - 1, data = model_data)
+        # Cluster on the integer codes: sandwich counts a factor's unused levels as clusters.
         # An exact fit makes summary.lm() warn; it is classified as invalid_variance below.
         V <- withCallingHandlers(
-          sandwich::vcovCL(model, cluster = data$respondent, type = "HC1", cadjust = TRUE),
+          sandwich::vcovCL(model, cluster = input$cluster, type = "HC1", cadjust = TRUE),
           warning = function(w) {
             if (grepl("essentially perfect fit", conditionMessage(w))) invokeRestart("muffleWarning")
           })
