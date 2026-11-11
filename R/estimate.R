@@ -283,7 +283,9 @@ amce_model_data <- function(data, design, groups) {
       stop("`group` must be present and non-missing for subgroup estimation.", call. = FALSE)
     }
     if (is.null(groups)) {
-      groups <- check_groups(if (is.factor(data$group)) levels(data$group) else unique(as.character(data$group)))
+      groups <- check_groups(if (is.factor(data$group)) {
+        levels(data$group)
+      } else unique(as.character(data$group)))
     }
     group_index <- match(as.character(data$group), groups)
     if (anyNA(group_index)) stop("data group names must match `groups`.", call. = FALSE)
@@ -294,10 +296,7 @@ amce_model_data <- function(data, design, groups) {
     groups <- NA_character_
     group_index <- rep.int(1L, nrow(data))
   }
-  meta <- do.call(rbind, lapply(attrs, function(a) {
-    lv <- design$levels[[a]]
-    data.frame(attribute = a, level = lv[-1], reference_level = lv[1], stringsAsFactors = FALSE)
-  }))
+  meta <- effect_metadata(design)[c("attribute", "level", "reference_level")]
   D <- do.call(cbind, lapply(attrs, function(a) {
     column <- data[[a]]
     if (!is.null(dim(column))) {

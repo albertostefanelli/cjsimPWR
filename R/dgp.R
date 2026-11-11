@@ -117,7 +117,9 @@ profile_difference_block <- function(levels) {
 
 exact_profile_reference <- function(n_levels) {
   size <- exact_profile_size(n_levels)
-  if (!exact_profile_fits(size)) stop("exact profile reference exceeds the 256 MiB workspace budget.", call. = FALSE)
+  if (!exact_profile_fits(size)) {
+    stop("exact profile reference exceeds the 256 MiB workspace budget.", call. = FALSE)
+  }
   sizes <- n_levels * (n_levels - 1) + 1
   rows <- size$rows
   pairs <- size$pairs
@@ -139,7 +141,8 @@ exact_profile_reference <- function(n_levels) {
       index <- indices[[i + 1L]]
       positive_rows <- (sizes[j] - 1) / 2
       sign <- ifelse(index == 1L, 0, ifelse(index <= positive_rows + 1L, 1, -1))
-      delta[selected, columns[[j]]] <- blocks[[j]][(index - 2L) %% positive_rows + 1L, , drop = FALSE] * sign
+      delta[selected, columns[[j]]] <-
+        blocks[[j]][(index - 2L) %% positive_rows + 1L, , drop = FALSE] * sign
       multiplicity <- multiplicity * ifelse(index == 1L, n_levels[j], 1)
     }
     # The omitted all-zero row has zero contribution. Its mass must NOT be redistributed.
@@ -149,7 +152,8 @@ exact_profile_reference <- function(n_levels) {
   weights <- delta
   for (k in seq_along(columns)) {
     j <- columns[[k]]
-    weights[, j] <- (delta[, j, drop = FALSE] + rowSums(delta[, j, drop = FALSE])) * n_levels[k] / 2 * mass
+    weights[, j] <- (delta[, j, drop = FALSE] + rowSums(delta[, j, drop = FALSE])) *
+      n_levels[k] / 2 * mass
   }
   list(delta = delta, weights = weights, exact = TRUE, pairs = as.integer(pairs), mass = mass)
 }
@@ -158,7 +162,9 @@ exact_profile_reference <- function(n_levels) {
 # Exact integration and the MC oracle use the same identity. MC uses a control variate with
 # known expectation beta/4 to reduce profile-integration error.
 profile_reference <- function(n_levels, pairs, exact_max_pairs, exact_max_rows) {
-  if (exact_profile_eligible(n_levels, exact_max_pairs, exact_max_rows)) return(exact_profile_reference(n_levels))
+  if (exact_profile_eligible(n_levels, exact_max_pairs, exact_max_rows)) {
+    return(exact_profile_reference(n_levels))
+  }
   z1 <- reference_dummies(draw_profiles(n_levels, pairs), n_levels)
   z2 <- reference_dummies(draw_profiles(n_levels, pairs), n_levels)
   delta <- z1 - z2
@@ -201,7 +207,9 @@ reference_sample <- function(n_levels, control, pairs, draws, heterogeneous, exa
   ref2 <- if (ref$exact || !heterogeneous) NULL else {
     profile_reference(n_levels, pairs, control$exact_max_pairs, control$exact_max_rows)
   }
-  U <- if (heterogeneous) matrix(stats::rnorm(draws * (sum(n_levels - 1) + length(n_levels))), draws) else NULL
+  U <- if (heterogeneous) {
+    matrix(stats::rnorm(draws * (sum(n_levels - 1) + length(n_levels))), draws)
+  } else NULL
   list(ref = ref, ref2 = ref2, U = U, attribute = rep(seq_along(n_levels), n_levels - 1))
 }
 
@@ -230,11 +238,14 @@ solve_amce_moments <- function(fn, x, tolerance, maxit) {
   jacobian <- function(x, fx) {
     vapply(seq_along(x), function(j) {
       h <- 1e-5 * max(1, abs(x[j]))
-      xh <- x; xh[j] <- xh[j] + h
+      xh <- x
+      xh[j] <- xh[j] + h
       (fn(xh) - fx) / h
     }, numeric(length(fx)))
   }
-  if (max(abs(value)) <= tolerance) return(list(x = x, residual = value, iterations = 0L, converged = TRUE))
+  if (max(abs(value)) <= tolerance) {
+    return(list(x = x, residual = value, iterations = 0L, converged = TRUE))
+  }
   J <- jacobian(x, value)
   for (iteration in seq_len(maxit)) {
     accepted <- FALSE
@@ -256,7 +267,8 @@ solve_amce_moments <- function(fn, x, tolerance, maxit) {
     if (!accepted) break
     dx <- candidate - x
     J <- J + tcrossprod(next_value - value - as.numeric(J %*% dx), dx) / sum(dx^2)
-    x <- candidate; value <- next_value
+    x <- candidate
+    value <- next_value
     if (max(abs(value)) <= tolerance) break
   }
   list(x = x, residual = value, iterations = iteration,

@@ -106,7 +106,6 @@
 #' approx_estimates <- rnorm(1000, mean = 0.0003, sd = 0.05)
 #' summarise_runs(approx_estimates, std.error = rep(0.05, 1000), truth = 0.0003, null = TRUE,
 #'                reference_mcse = 0.0001, reference_half_width = 0.0003)
-
 summarise_runs <- function(estimate, std.error, truth, alpha = 0.05, df = Inf,
                            null = truth == 0, reference_mcse = 0, reference_half_width = 0) {
   if (!is.numeric(estimate)) {
@@ -232,7 +231,9 @@ print.cj_performance <- function(x, digits = 3, ...) {
   labels <- c(power = "Power", type_1_error = "Type I error", type_s = "Type S", type_m = "Type M",
               coverage = "Coverage")
   out <- data.frame(row.names = seq_len(nrow(x)))
-  for (col in intersect(c("estimator", "scale", "type", "group", "term", "attribute", "level", "true_amce", "true_value"), names(x))) {
+  shown <- c("estimator", "scale", "type", "group", "term", "attribute", "level", "true_amce",
+             "true_value")
+  for (col in intersect(shown, names(x))) {
     if ("estimator" %in% names(x) && all(is.na(x[[col]]))) next
     out[[col]] <- if (col %in% c("true_amce", "true_value")) round(x[[col]], 4) else x[[col]]
   }

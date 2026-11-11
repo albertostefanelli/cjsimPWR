@@ -31,7 +31,8 @@ power_latent <- function(model, units, n_tasks, estimators, paired_terms, scale,
   latent_reference <- NULL
   if ("paired" %in% estimators && identical(scale, "latent")) {
     if (identical(paired_terms, names(model$terms))) {
-      latent_reference <- model$truth[model$truth$estimator == "paired" & model$truth$scale == "latent", , drop = FALSE]
+      latent_reference <- model$truth[model$truth$estimator == "paired" &
+                                        model$truth$scale == "latent", , drop = FALSE]
     } else {
       # Length-prefixed UTF-8 names preserve order without collisions from delimiters in labels.
       terms_utf8 <- enc2utf8(paired_terms)
@@ -70,22 +71,7 @@ power_latent <- function(model, units, n_tasks, estimators, paired_terms, scale,
   worker <- latent_power_worker(model, units, n_tasks, estimators, paired_terms, scale,
                                vcov, inference, alpha, truth)
   workers <- min(cores, sim_runs)
-  results <- with_reference_seed(seed, {
-    streams <- vector("list", sim_runs)
-    streams[[1L]] <- get(".Random.seed", envir = .GlobalEnv)
-    for (i in seq_len(sim_runs - 1L)) streams[[i + 1L]] <- parallel::nextRNGStream(streams[[i]])
-    if (workers == 1L) {
-      lapply(streams, worker)
-    } else {
-      cluster <- parallel::makePSOCKcluster(workers)
-      on.exit(parallel::stopCluster(cluster), add = TRUE)
-      parallel::clusterCall(cluster, function(paths) .libPaths(paths), .libPaths())
-      parallel::parLapply(cluster, streams, worker)
-    }
-  })
-  runs <- do.call(rbind, lapply(seq_along(results), function(i) {
-    data.frame(run = i, results[[i]], row.names = NULL)
-  }))
+  runs <- run_experiments(worker, sim_runs, seed, workers)
   # Index each effect's runs once instead of rescanning the run table per effect.
   by_effect <- split(seq_len(nrow(runs)), factor(runs$effect_id, levels = truth$effect_id))
   performance <- do.call(rbind, lapply(truth$effect_id, function(id) {
@@ -134,34 +120,10 @@ latent_sign_warning <- function(rows) {
     "are not meaningful, although they are still reported.")
 }
 
-# Collect only package helpers reachable from the sampling/estimation entry points. all.names()
-# also finds functions passed as values (for example lapply(..., helper)), unlike a call-only scan.
-# Every copied function resolves into the same bounded base-parent environment on PSOCK workers.
-latent_worker_environment <- function() {
-  source <- environment(latent_worker_environment)
-  env <- new.env(parent = baseenv())
-  pending <- c("simulate_experiment", "estimate_amce", "estimate_paired", "match_effect_rows")
-  copied <- character()
-  while (length(pending)) {
-    nm <- pending[1L]
-    pending <- pending[-1L]
-    if (nm %in% copied || !exists(nm, envir = source, inherits = FALSE)) next
-    fn <- get(nm, envir = source, inherits = FALSE)
-    if (!is.function(fn)) next
-    dependencies <- unique(all.names(body(fn), functions = TRUE))
-    # Include symbols as well as calls so callbacks are copied too.
-    dependencies <- union(dependencies, all.names(body(fn), functions = FALSE))
-    environment(fn) <- env
-    env[[nm]] <- fn
-    copied <- c(copied, nm)
-    pending <- union(pending, setdiff(dependencies, copied))
-  }
-  env
-}
-
 latent_power_worker <- function(model, units, n_tasks, estimators, paired_terms, scale,
                                 vcov, inference, alpha, truth) {
-  env <- latent_worker_environment()
+  env <- worker_environment(c("simulate_experiment", "estimate_amce", "estimate_paired",
+                              "match_effect_rows", "run_error_rows"))
   labels <- c("effect_id", "estimator", "scale", "term", "type", "group", "group_name",
               "reference_group", "attribute", "level", "reference_level")
   list2env(list(model = model, units = units, n_tasks = n_tasks, estimators = estimators,
@@ -169,19 +131,9 @@ latent_power_worker <- function(model, units, n_tasks, estimators, paired_terms,
     alpha = alpha, template = truth[labels]), envir = env)
   eval(quote(function(stream) {
     assign(".Random.seed", stream, envir = .GlobalEnv)
-    blank <- function(template, message) {
-      for (nm in c("n_clusters_effect", "estimate", "std.error", "df", "statistic", "p.value",
-                   "conf.low", "conf.high", "n_clusters", "rank")) template[[nm]] <- NA_real_
-      template$vcov <- vcov
-      template$inference <- inference
-      template$failure_reason <- "run_error"
-      template$status <- "failed"
-      template$error_message <- message
-      template
-    }
     sampled <- tryCatch(list(data = simulate_experiment(model$design, units = units,
       n_tasks = n_tasks, model = model)), error = function(e) list(error = conditionMessage(e)))
-    if (!is.null(sampled$error)) return(blank(template, sampled$error))
+    if (!is.null(sampled$error)) return(run_error_rows(template, vcov, inference, sampled$error))
     do.call(rbind, lapply(estimators, function(estimator) {
       target <- template[template$estimator == estimator, , drop = FALSE]
       tryCatch({
@@ -206,9 +158,12 @@ latent_power_worker <- function(model, units, n_tasks, estimators, paired_terms,
                     "failure_reason", "status")
         for (nm in fields) target[[nm]] <- fit[[nm]][order]
         target$error_message <- NA_character_
-        if (!is.null(message)) target$error_message[target$failure_reason %in% "covariance_failure"] <- paste(message, collapse = "; ")
+        if (!is.null(message)) {
+          target$error_message[target$failure_reason %in% "covariance_failure"] <-
+            paste(message, collapse = "; ")
+        }
         target
-      }, error = function(e) blank(target, conditionMessage(e)))
+      }, error = function(e) run_error_rows(target, vcov, inference, conditionMessage(e)))
     }))
   }), envir = env)
 }

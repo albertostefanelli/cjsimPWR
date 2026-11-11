@@ -133,10 +133,13 @@ simulate_experiment <- function(design, true_amce = NULL, units, n_tasks, groups
     }
     if ((!missing(true_amce) && !is.null(true_amce)) || !missing(sigma) || !missing(dgp) ||
         !missing(latent_sigma) || !missing(calibration_control)) {
-      stop("with a prepared `model`, omit true_amce, sigma, dgp, latent_sigma and calibration_control.", call. = FALSE)
+      stop("with a prepared `model`, omit true_amce, sigma, dgp, latent_sigma and calibration_control.",
+           call. = FALSE)
     }
     if (is.null(groups)) groups <- model$groups
-    if (!identical(groups, model$groups)) stop("`groups` must match the prepared model's order.", call. = FALSE)
+    if (!identical(groups, model$groups)) {
+      stop("`groups` must match the prepared model's order.", call. = FALSE)
+    }
   }
   groups <- check_groups(groups)
   units <- per_group(units, groups, "units")
@@ -156,19 +159,21 @@ simulate_experiment <- function(design, true_amce = NULL, units, n_tasks, groups
     latent <- draw_latent_respondents(model, group_of)
     coef_respondent <- latent$beta
     if (any(!is.finite(coef_respondent))) {
-      stop("nonfinite latent effective coefficients; inspect coefficient and score magnitudes.", call. = FALSE)
+      stop("nonfinite latent effective coefficients; inspect coefficient and score magnitudes.",
+           call. = FALSE)
     }
     data <- latent_score_columns(data, model, latent$variables)
   } else {
-  # Keep the draw order stable: coefficient deviations, reference utilities, then choices.
-  deviations <- matrix(stats::rnorm(length(group_of) * ncol(model$gamma)), nrow = length(group_of))
-  coef_respondent <- model$gamma[group_of, , drop = FALSE] + deviations * model$raw_sd[group_of, , drop = FALSE]
-  if (any(model$baseline_sd > 0)) {
-    base <- matrix(stats::rnorm(length(group_of) * ncol(model$baseline_sd)), nrow = length(group_of)) *
-      model$baseline_sd[group_of, , drop = FALSE]
-    attribute <- rep(seq_along(design$n_levels), design$n_levels - 1)
-    coef_respondent <- coef_respondent - base[, attribute, drop = FALSE]
-  }
+    # Keep the draw order stable: coefficient deviations, reference utilities, then choices.
+    deviations <- matrix(stats::rnorm(length(group_of) * ncol(model$gamma)), nrow = length(group_of))
+    coef_respondent <- model$gamma[group_of, , drop = FALSE] +
+      deviations * model$raw_sd[group_of, , drop = FALSE]
+    if (any(model$baseline_sd > 0)) {
+      base <- matrix(stats::rnorm(length(group_of) * ncol(model$baseline_sd)),
+                     nrow = length(group_of)) * model$baseline_sd[group_of, , drop = FALSE]
+      attribute <- rep(seq_along(design$n_levels), design$n_levels - 1)
+      coef_respondent <- coef_respondent - base[, attribute, drop = FALSE]
+    }
   }
   score <- profile_scores(data, design, coef_respondent)
   first <- data$profile == 1L
@@ -258,7 +263,8 @@ per_group <- function(x, groups, arg) {
 # AMCEs as a matrix: one row per group (a single row without groups), one column per non-reference level
 # in design order.
 amce_matrix <- function(true_amce, design, groups = NULL) {
-  per_group_input <- is.list(true_amce) && length(true_amce) > 0 && all(vapply(true_amce, is.list, logical(1)))
+  per_group_input <- is.list(true_amce) && length(true_amce) > 0 &&
+    all(vapply(true_amce, is.list, logical(1)))
   if (is.null(groups)) {
     if (per_group_input) {
       stop("`true_amce` is given per group, but `groups` is missing.", call. = FALSE)

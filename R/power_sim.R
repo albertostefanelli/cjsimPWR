@@ -24,6 +24,7 @@
 #' @param scale Paired reporting scale: `"latent"` or `"probability"`. Paired-only power defaults to
 #'   latent coefficients. Selecting both estimators requires probability scale and chooses it with
 #'   a message when omitted. Paired probability reporting supports CR1 only.
+#'
 #' @section Reproducibility: Each experiment has its own L'Ecuyer-CMRG stream, so results are identical
 #'   across worker counts and the first runs remain unchanged when `sim_runs` increases. Calibration
 #'   has its own seed argument in `calibration_control`. Equal seed values can overlap calibration and
@@ -175,7 +176,9 @@ power_sim <- function(levels = NULL, true_amce = NULL, units, n_tasks, groups = 
     if (!latent) stop("paired power requires a latent `model` from utility_model().", call. = FALSE)
     if (is.null(scale)) {
       scale <- if (length(estimators) == 2L) "probability" else "latent"
-      if (length(estimators) == 2L) message("Paired estimates are reported as AMCEs on the probability scale. Use estimators = 'paired' for latent coefficients.")
+      if (length(estimators) == 2L) {
+        message("Paired estimates are reported as AMCEs on the probability scale. Use estimators = 'paired' for latent coefficients.")
+      }
     }
     scale <- match.arg(scale, c("latent", "probability"))
     if (length(estimators) == 2L && scale != "probability") {
@@ -210,22 +213,7 @@ power_sim <- function(levels = NULL, true_amce = NULL, units, n_tasks, groups = 
   truth <- data.frame(effect_id = seq_len(nrow(model$truth)), model$truth, row.names = NULL)
   worker <- power_worker(model, units, n_tasks, vcov, inference, alpha)
   workers <- min(cores, sim_runs)
-  results <- with_reference_seed(seed, {
-    streams <- vector("list", sim_runs)
-    streams[[1]] <- get(".Random.seed", envir = .GlobalEnv)
-    for (i in seq_len(sim_runs - 1L)) streams[[i + 1L]] <- parallel::nextRNGStream(streams[[i]])
-    if (workers == 1L) {
-      lapply(streams, worker)
-    } else {
-      cluster <- parallel::makePSOCKcluster(workers)
-      on.exit(parallel::stopCluster(cluster), add = TRUE)
-      parallel::clusterCall(cluster, function(paths) .libPaths(paths), .libPaths())
-      parallel::parLapply(cluster, streams, worker)
-    }
-  })
-  runs <- do.call(rbind, lapply(seq_along(results), function(i) {
-    data.frame(run = i, results[[i]], row.names = NULL)
-  }))
+  runs <- run_experiments(worker, sim_runs, seed, workers)
   # Index each effect's runs once instead of rescanning the run table per effect.
   by_effect <- split(seq_len(nrow(runs)), factor(runs$effect_id, levels = truth$effect_id))
   performance <- do.call(rbind, lapply(truth$effect_id, function(id) {
@@ -242,13 +230,35 @@ power_sim <- function(levels = NULL, true_amce = NULL, units, n_tasks, groups = 
                    sigma = sigma, latent_sigma = latent_sigma, dgp = model$dgp, alpha = alpha,
                    vcov = vcov, inference = inference, sim_runs = sim_runs, seed = seed,
                    cores = cores, workers = workers, keep_runs = keep_runs,
-                   calibration_control = model$control, rng = c("L'Ecuyer-CMRG", "Inversion", "Rejection"))
+                   calibration_control = model$control,
+                   rng = c("L'Ecuyer-CMRG", "Inversion", "Rejection"))
   if (!is.null(groups)) {
     names(settings$units) <- names(settings$n_tasks) <- groups
   }
   structure(list(performance = performance, truth = truth, parameters = model$parameters,
                  diagnostics = model$diagnostics, settings = settings, failures = failures,
                  runs = if (keep_runs) runs else NULL, model = model), class = "cj_power")
+}
+
+# Run `worker` once per experiment and stack the results with their run number. Each experiment has
+# its own L'Ecuyer-CMRG stream, so results do not depend on the number of workers.
+run_experiments <- function(worker, sim_runs, seed, workers) {
+  results <- with_reference_seed(seed, {
+    streams <- vector("list", sim_runs)
+    streams[[1]] <- get(".Random.seed", envir = .GlobalEnv)
+    for (i in seq_len(sim_runs - 1L)) streams[[i + 1L]] <- parallel::nextRNGStream(streams[[i]])
+    if (workers == 1L) {
+      lapply(streams, worker)
+    } else {
+      cluster <- parallel::makePSOCKcluster(workers)
+      on.exit(parallel::stopCluster(cluster), add = TRUE)
+      parallel::clusterCall(cluster, function(paths) .libPaths(paths), .libPaths())
+      parallel::parLapply(cluster, streams, worker)
+    }
+  })
+  do.call(rbind, lapply(seq_along(results), function(i) {
+    data.frame(run = i, results[[i]], row.names = NULL)
+  }))
 }
 
 # Known-SE, unbiased normal benchmark only: this is not a size bound for the fitted cluster test.
@@ -263,9 +273,12 @@ diagnose_nulls <- function(performance, alpha, approximate) {
   # One tenth of the nominal null MCSE is a diagnostic threshold, not a statistical guarantee.
   threshold <- 0.1 * sqrt(alpha * (1 - alpha) / pmax(1, performance$n_valid))
   material <- eligible & !is.na(sensitivity) & sensitivity > threshold
-  if (any(material)) warning("Calibrated null sensitivity exceeds one tenth of the nominal Type I error MCSE for effect(s) ",
-    paste(which(material), collapse = ", "), ". Type I error is approximate; tighten calibration_control. ",
-    "This normal-theory diagnostic is not a guarantee for clustered inference.", call. = FALSE)
+  if (any(material)) {
+    warning("Calibrated null sensitivity exceeds one tenth of the nominal Type I error MCSE for effect(s) ",
+            paste(which(material), collapse = ", "),
+            ". Type I error is approximate; tighten calibration_control. ",
+            "This normal-theory diagnostic is not a guarantee for clustered inference.", call. = FALSE)
+  }
   invisible(NULL)
 }
 
@@ -279,7 +292,8 @@ positive_count <- function(x, arg) {
 
 # Exact tuple matching: display labels and delimiter-containing user names are never parsed.
 match_effect_rows <- function(template, data,
-                              columns = c("type", "group_name", "reference_group", "attribute", "level", "reference_level")) {
+                              columns = c("type", "group_name", "reference_group", "attribute",
+                                          "level", "reference_level")) {
   codes <- lapply(columns, function(nm) match(data[[nm]], unique(template[[nm]])))
   if (anyNA(unlist(codes))) stop("estimated effects do not match the design.", call. = FALSE)
   keys <- do.call(paste, c(codes, sep = ":"))
@@ -293,18 +307,42 @@ match_effect_rows <- function(template, data,
   index
 }
 
-# Send the exact currently loaded implementation, not a possibly stale installed package, to PSOCK
-# workers. This bounded environment contains only sampling/estimation functions and the prepared model.
-power_worker <- function(model, units, n_tasks, vcov, inference, alpha) {
+# Workers get copies of the functions they run, in an environment whose parent is the base
+# namespace, so PSOCK workers use the code loaded here and not a possibly stale installed package.
+# Starting from `entry`, copy every package function a copied function names, as a call or as a
+# value (for example lapply(x, helper)).
+worker_environment <- function(entry) {
+  source <- environment(worker_environment)
   env <- new.env(parent = baseenv())
-  functions <- c("simulate_experiment", "sample_tasks", "draw_profiles", "profile_scores",
-                 "check_groups", "per_group", "estimate_amce", "amce_model_data", "check_inference",
-                 "match_effect_rows", "power2_scale")
-  for (nm in functions) {
-    fn <- get(nm, envir = environment(power_worker))
+  pending <- entry
+  while (length(pending)) {
+    nm <- pending[1L]
+    pending <- pending[-1L]
+    if (exists(nm, envir = env, inherits = FALSE) || !exists(nm, envir = source, inherits = FALSE)) next
+    fn <- get(nm, envir = source, inherits = FALSE)
+    if (!is.function(fn)) next
+    pending <- union(pending, all.names(body(fn), unique = TRUE))
     environment(fn) <- env
     env[[nm]] <- fn
   }
+  env
+}
+
+# Rows for a run that failed before any estimate was made: every effect keeps its labels.
+run_error_rows <- function(template, vcov, inference, message) {
+  for (nm in c("n_clusters_effect", "estimate", "std.error", "df", "statistic", "p.value",
+               "conf.low", "conf.high", "n_clusters", "rank")) template[[nm]] <- NA_real_
+  template$vcov <- vcov
+  template$inference <- inference
+  template$failure_reason <- "run_error"
+  template$status <- "failed"
+  template$error_message <- message
+  template
+}
+
+power_worker <- function(model, units, n_tasks, vcov, inference, alpha) {
+  env <- worker_environment(c("simulate_experiment", "estimate_amce", "match_effect_rows",
+                              "run_error_rows"))
   list2env(list(model = model, units = units, n_tasks = n_tasks, vcov = vcov,
                 inference = inference, alpha = alpha), envir = env)
   eval(quote(function(stream) {
@@ -321,27 +359,22 @@ power_worker <- function(model, units, n_tasks, vcov, inference, alpha) {
       message <- attr(fit, "covariance_error")
       attr(fit, "covariance_error") <- NULL
       fit$error_message <- NA_character_
-      if (!is.null(message)) fit$error_message[fit$failure_reason %in% "covariance_failure"] <- message
+      if (!is.null(message)) {
+        fit$error_message[fit$failure_reason %in% "covariance_failure"] <- message
+      }
       fit
-    }, error = function(e) {
-      out <- template
-      for (nm in c("n_clusters_effect", "estimate", "std.error", "df", "statistic", "p.value",
-                   "conf.low", "conf.high", "n_clusters", "rank")) out[[nm]] <- NA_real_
-      out$vcov <- vcov
-      out$inference <- inference
-      out$failure_reason <- "run_error"
-      out$status <- "failed"
-      out$error_message <- conditionMessage(e)
-      out
-    })
+    }, error = function(e) run_error_rows(template, vcov, inference, conditionMessage(e)))
     out$effect_id <- seq_len(nrow(template))
     out
   }), envir = env)
 }
 
+# Number of failed runs by effect, failure reason and error message.
 power_failures <- function(runs, truth,
-                           labels = c("effect_id", "type", "group", "group_name", "reference_group", "attribute", "level", "reference_level")) {
-  failed <- runs[runs$status == "failed", c("effect_id", "failure_reason", "error_message"), drop = FALSE]
+                           labels = c("effect_id", "type", "group", "group_name", "reference_group",
+                                      "attribute", "level", "reference_level")) {
+  failed <- runs[runs$status == "failed", c("effect_id", "failure_reason", "error_message"),
+                 drop = FALSE]
   counts <- unique(failed)
   counts$n_failed <- vapply(seq_len(nrow(counts)), function(i) {
     sum(failed$effect_id == counts$effect_id[i] & failed$failure_reason == counts$failure_reason[i] &
@@ -357,7 +390,8 @@ print.cj_power <- function(x, digits = 3, ...) {
   cat("Conjoint simulation:", x$settings$sim_runs, "runs;", x$settings$dgp, "DGP;",
       x$settings$vcov, "/", x$settings$inference, "inference.\n")
   if (identical(x$settings$specification, "latent")) {
-    cat("Estimators: ", paste(x$settings$estimators, collapse = ", "), "; scale: ", x$settings$scale, "\n", sep = "")
+    cat("Estimators: ", paste(x$settings$estimators, collapse = ", "),
+        "; scale: ", x$settings$scale, "\n", sep = "")
   }
   print(x$performance, digits = digits, ...)
   if (nrow(x$failures)) cat("See $failures for counts and reasons by effect.\n")

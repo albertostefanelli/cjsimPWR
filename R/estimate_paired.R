@@ -49,7 +49,9 @@ solve_paired_logit <- function(evaluate, start, numerics = paired_numerics()) {
   if (any(!is.finite(gamma))) return(result("nonfinite"))
   for (it in seq_len(numerics$maxit)) {
     diagnostics$iteration <- it
-    value <- if (is.null(cached)) tryCatch(evaluate(gamma), error = function(e) list(error = conditionMessage(e))) else cached
+    value <- if (is.null(cached)) {
+      tryCatch(evaluate(gamma), error = function(e) list(error = conditionMessage(e)))
+    } else cached
     if (!is.null(value$error)) {
       diagnostics$message <- value$error
       return(result("nonfinite"))
@@ -122,13 +124,18 @@ solve_paired_logit <- function(evaluate, start, numerics = paired_numerics()) {
 }
 
 paired_analysis <- function(design, terms, model = NULL) {
-  if (!inherits(design, "cj_design")) stop("`design` must be created with conjoint_design().", call. = FALSE)
+  if (!inherits(design, "cj_design")) {
+    stop("`design` must be created with conjoint_design().", call. = FALSE)
+  }
   attrs <- names(design$levels)
   if (is.null(terms)) terms <- if (is.null(model)) attrs else names(model$terms)
-  if (!is.character(terms) || !length(terms) || anyNA(terms) || any(!nzchar(terms)) || anyDuplicated(terms)) {
+  if (!is.character(terms) || !length(terms) || anyNA(terms) || any(!nzchar(terms)) ||
+      anyDuplicated(terms)) {
     stop("`terms` must be a nonempty, unique character vector.", call. = FALSE)
   }
-  columns <- if (!is.null(model)) vapply(model$terms, function(t) t$column, character(1)) else character()
+  columns <- if (!is.null(model)) {
+    vapply(model$terms, function(t) t$column, character(1))
+  } else character()
   rows <- lapply(terms, function(term) {
     if (term %in% attrs) {
       lv <- design$levels[[term]]
@@ -144,7 +151,9 @@ paired_analysis <- function(design, terms, model = NULL) {
       }
     } else {
       m <- match(term, columns)
-      if (!is.null(model) && is.na(m)) stop("Unknown paired term '", term, "' for this model.", call. = FALSE)
+      if (!is.null(model) && is.na(m)) {
+        stop("Unknown paired term '", term, "' for this model.", call. = FALSE)
+      }
       t <- if (!is.na(m)) model$terms[[m]] else NULL
       ci <- if (!is.null(t)) model$coefficient_metadata$coefficient_index[
         model$coefficient_metadata$term == names(model$terms)[m]] else NA_integer_
@@ -158,7 +167,8 @@ paired_analysis <- function(design, terms, model = NULL) {
   out <- do.call(rbind, rows)
   rownames(out) <- NULL
   out$analysis_index <- seq_len(nrow(out))
-  out[c("analysis_index", "term", "type", "attribute", "level", "reference_level", "source_column", "coefficient_index")]
+  out[c("analysis_index", "term", "type", "attribute", "level", "reference_level",
+        "source_column", "coefficient_index")]
 }
 
 paired_model_data <- function(data, design, terms, groups) {
@@ -175,7 +185,9 @@ paired_model_data <- function(data, design, terms, groups) {
   }
   if (any(!data$y %in% c(0, 1))) stop("Paired `y` must be binary (0 or 1).", call. = FALSE)
   profile <- as.character(data$profile)
-  if (any(!profile %in% c("1", "2"))) stop("Each respondent-task needs exactly one profile 1 and 2.", call. = FALSE)
+  if (any(!profile %in% c("1", "2"))) {
+    stop("Each respondent-task needs exactly one profile 1 and 2.", call. = FALSE)
+  }
   r1 <- which(profile == "1")
   r2 <- which(profile == "2")
   id <- match(data$respondent, unique(data$respondent))
@@ -195,10 +207,9 @@ paired_model_data <- function(data, design, terms, groups) {
   model <- attr(data, "dgp")
   if (!identical(model$specification, "latent")) model <- NULL
   # External score columns are allowed even on simulated data; only power restricts selections.
-  analysis <- paired_analysis(design, terms, if (is.null(terms)) model else NULL)
-  if (!is.null(terms) && !is.null(model) && all(terms %in% c(names(design$levels), names(model$terms)))) {
-    analysis <- paired_analysis(design, terms, model)
-  }
+  # The attached model describes the terms only when it generated all of them.
+  if (!is.null(terms) && !all(terms %in% c(names(design$levels), names(model$terms)))) model <- NULL
+  analysis <- paired_analysis(design, terms, model)
   X <- vapply(seq_len(nrow(analysis)), function(j) {
     a <- analysis[j, ]
     if (a$type == "dummy") {
@@ -235,7 +246,8 @@ paired_model_data <- function(data, design, terms, groups) {
 }
 
 paired_overlap_result <- function(ok, stage, message = NULL, error = FALSE, ...) {
-  list(ok = isTRUE(ok), diagnostics = c(list(stage = stage, message = message, error = error), list(...)))
+  list(ok = isTRUE(ok),
+       diagnostics = c(list(stage = stage, message = message, error = error), list(...)))
 }
 
 # Q can be supplied from the unweighted design QR, with the outcome signs applied to its rows.
@@ -251,9 +263,12 @@ paired_verify_overlap <- function(M, w, Q = NULL) {
     if (is.null(Q)) Q <- qr.Q(qr(M, LAPACK = FALSE))[, seq_len(ncol(M)), drop = FALSE]
     a <- w - drop(Q %*% crossprod(Q, w))
     tau <- 100 * nrow(M) * .Machine$double.eps
-    if (any(!is.finite(a))) return(paired_overlap_result(FALSE, stage, "nonfinite projected weights", TRUE))
+    if (any(!is.finite(a))) {
+      return(paired_overlap_result(FALSE, stage, "nonfinite projected weights", TRUE))
+    }
     if (min(a) <= max(tau, 1e-6 * max(abs(a)))) {
-      return(paired_overlap_result(FALSE, stage, "positivity guard failed", min_weight = min(a), tolerance = tau))
+      return(paired_overlap_result(FALSE, stage, "positivity guard failed",
+                                   min_weight = min(a), tolerance = tau))
     }
     stage <- "balance"
     balance <- max(abs(crossprod(M, a)) / colSums(abs(M) * a))
@@ -262,8 +277,6 @@ paired_verify_overlap <- function(M, w, Q = NULL) {
                           min_weight = min(a), balance = balance, tolerance = tau)
   }, error = function(e) paired_overlap_result(FALSE, stage, conditionMessage(e), TRUE))
 }
-
-fast_overlap <- function(B, w, Q = NULL) paired_verify_overlap(B, w, Q)
 
 quadratic_overlap <- function(B, numerics = paired_numerics()) {
   stage <- "row_scaling"
@@ -324,8 +337,9 @@ fit_paired_block <- function(X, y) {
     signs <- 2 * y - 1
     B <- Xs * signs
     fast <- tryCatch({
-      Q <- qr.Q(qr(Xs, tol = numerics$rank_tol, LAPACK = FALSE))[, seq_len(ncol(Xs)), drop = FALSE] * signs
-      fast_overlap(B, stats::plogis(-signs * eta), Q)
+      Q <- qr.Q(qr(Xs, tol = numerics$rank_tol, LAPACK = FALSE))[, seq_len(ncol(Xs)), drop = FALSE] *
+        signs
+      paired_verify_overlap(B, stats::plogis(-signs * eta), Q)
     }, error = function(e) paired_overlap_result(FALSE, "design_qr", conditionMessage(e), TRUE))
     diagnostics$overlap$fast <- fast
     accepted <- fast$ok
@@ -359,9 +373,11 @@ paired_reduce <- function(X, paired = TRUE) {
     qr_reduced <- qr(sweep(X[, keep, drop = FALSE], 2L, scales[keep], "/"),
                      tol = if (paired) paired_numerics()$rank_tol else 1e-7, LAPACK = FALSE)
     A_std[, nonzero] <- qr.coef(qr_reduced, Xs)
-    A[, nonzero] <- sweep(sweep(A_std[, nonzero, drop = FALSE], 1L, scales[keep], "/"), 2L, scales[nonzero], "*")
+    A[, nonzero] <- sweep(sweep(A_std[, nonzero, drop = FALSE], 1L, scales[keep], "/"),
+                          2L, scales[nonzero], "*")
   }
-  list(keep = keep, X = X[, keep, drop = FALSE], A = A, A_std = A_std, scales = scales, rank = length(keep))
+  list(keep = keep, X = X[, keep, drop = FALSE], A = A, A_std = A_std, scales = scales,
+       rank = length(keep))
 }
 
 # A contrast is estimable when the kept columns reproduce it. Comparing in scaled units, relative to
@@ -387,14 +403,18 @@ paired_output_layout <- function(input, scale) {
   clusters <- vapply(input$identifiers, function(z) length(unique(z$respondent)), integer(1))
   out <- do.call(rbind, lapply(seq_len(ng), function(g) {
     data.frame(type = "coefficient", group = input$groups[g], group_name = input$groups[g],
-               reference_group = NA_character_, meta, n_clusters_effect = clusters[g], stringsAsFactors = FALSE)
+               reference_group = NA_character_, meta, n_clusters_effect = clusters[g],
+               stringsAsFactors = FALSE)
   }))
   C <- diag(ng * p)
-  if (ng > 1L) for (g in 2:ng) {
-    out <- rbind(out, data.frame(type = "difference", group = paste(input$groups[g], "-", input$groups[1]),
-      group_name = input$groups[g], reference_group = input$groups[1], meta,
-      n_clusters_effect = clusters[g] + clusters[1], stringsAsFactors = FALSE))
-    C <- rbind(C, C[(g - 1L) * p + seq_len(p), , drop = FALSE] - C[seq_len(p), , drop = FALSE])
+  if (ng > 1L) {
+    for (g in 2:ng) {
+      out <- rbind(out, data.frame(
+        type = "difference", group = paste(input$groups[g], "-", input$groups[1]),
+        group_name = input$groups[g], reference_group = input$groups[1], meta,
+        n_clusters_effect = clusters[g] + clusters[1], stringsAsFactors = FALSE))
+      C <- rbind(C, C[(g - 1L) * p + seq_len(p), , drop = FALSE] - C[seq_len(p), , drop = FALSE])
+    }
   }
   rownames(out) <- NULL
   list(table = out, C = C)
@@ -405,9 +425,13 @@ paired_auxiliary_glm <- function(X, y, start, eta) {
   warnings <- character()
   d <- data.frame(y = y, X, check.names = FALSE)
   names(d) <- c("y", paste0("b", seq_len(ncol(X))))
-  model <- withCallingHandlers(stats::glm(y ~ . - 1, data = d, family = stats::binomial(),
-    start = start, control = stats::glm.control(epsilon = 1e-10, maxit = 50), x = TRUE, y = TRUE),
-    warning = function(w) { warnings <<- c(warnings, conditionMessage(w)); invokeRestart("muffleWarning") })
+  model <- withCallingHandlers(
+    stats::glm(y ~ . - 1, data = d, family = stats::binomial(), start = start,
+               control = stats::glm.control(epsilon = 1e-10, maxit = 50), x = TRUE, y = TRUE),
+    warning = function(w) {
+      warnings <<- c(warnings, conditionMessage(w))
+      invokeRestart("muffleWarning")
+    })
   gamma <- stats::coef(model)
   actual <- drop(X %*% gamma)
   n <- paired_numerics()
@@ -473,7 +497,9 @@ paired_covariance <- function(blocks, C, eligible, n, G, k, scale, vcov, inferen
     if (is.null(cov$error)) {
       if (vcov == "CR1") cov$V <- cov$V * G / (G - 1) * (n - 1) / (n - k)
       # Infinite entries would reach other groups' rows through 0 * Inf in the contrast product.
-      if (any(!is.finite(cov$V))) cov <- list(error = "nonfinite group covariance; check predictor units")
+      if (any(!is.finite(cov$V))) {
+        cov <- list(error = "nonfinite group covariance; check predictor units")
+      }
     }
     if (!is.null(cov$error)) {
       failed <- union(failed, needed)
@@ -503,8 +529,10 @@ paired_covariance <- function(blocks, C, eligible, n, G, k, scale, vcov, inferen
             md <- models[[a]]
             contrast <- sweep(C[[a]][r, , drop = FALSE], 2L, blocks[[a]]$fit$diagnostics$scales, "/")
           } else {
-            a <- involved[1]; b <- involved[2]
-            Xa <- models[[a]]$X; Xb <- models[[b]]$X
+            a <- involved[1]
+            b <- involved[2]
+            Xa <- models[[a]]$X
+            Xb <- models[[b]]$X
             joint <- rbind(cbind(Xa, matrix(0, nrow(Xa), ncol(Xb))),
                            cbind(matrix(0, nrow(Xb), ncol(Xa)), Xb))
             yy <- c(blocks[[a]]$y, blocks[[b]]$y)
@@ -513,9 +541,11 @@ paired_covariance <- function(blocks, C, eligible, n, G, k, scale, vcov, inferen
             eta <- c(blocks[[a]]$fit$eta, blocks[[b]]$fit$eta)
             aux <- paired_auxiliary_glm(joint, yy, start, eta)
             cluster <- c(blocks[[a]]$cluster, blocks[[b]]$cluster)
-            md <- list(aux = aux, covariance = clubSandwich::vcovCR(aux$model, cluster = cluster, type = "CR2"))
-            contrast <- cbind(sweep(C[[a]][r, , drop = FALSE], 2L, blocks[[a]]$fit$diagnostics$scales, "/"),
-                              sweep(C[[b]][r, , drop = FALSE], 2L, blocks[[b]]$fit$diagnostics$scales, "/"))
+            md <- list(aux = aux,
+                       covariance = clubSandwich::vcovCR(aux$model, cluster = cluster, type = "CR2"))
+            contrast <- cbind(
+              sweep(C[[a]][r, , drop = FALSE], 2L, blocks[[a]]$fit$diagnostics$scales, "/"),
+              sweep(C[[b]][r, , drop = FALSE], 2L, blocks[[b]]$fit$diagnostics$scales, "/"))
           }
           clubSandwich::linear_contrast(md$aux$model, vcov = md$covariance, contrasts = contrast,
                                         level = 1 - alpha, test = "Satterthwaite")$df
@@ -598,7 +628,9 @@ estimate_paired <- function(data, design, terms = NULL, groups = NULL, vcov = c(
   vcov <- match.arg(vcov)
   scale <- match.arg(scale)
   inference <- check_inference(vcov, inference, alpha)
-  if (vcov == "CR2" && scale == "probability") stop("Paired probability output requires CR1 covariance.", call. = FALSE)
+  if (vcov == "CR2" && scale == "probability") {
+    stop("Paired probability output requires CR1 covariance.", call. = FALSE)
+  }
   input <- paired_model_data(data, design, terms, groups)
   layout <- paired_output_layout(input, scale)
   out <- layout$table
@@ -622,7 +654,9 @@ estimate_paired <- function(data, design, terms = NULL, groups = NULL, vcov = c(
   # Counts include all groups even when their subsequent fit fails.
   G <- length(unique(data$respondent))
   n <- if (scale == "latent") sum(lengths(input$y)) else nrow(data)
-  k <- sum(vapply(blocks, function(b) if (scale == "latent") b$reduced$rank else b$projection$rank, integer(1)))
+  k <- sum(vapply(blocks, function(b) {
+    if (scale == "latent") b$reduced$rank else b$projection$rank
+  }, integer(1)))
   C <- lapply(seq_len(ng), function(g) {
     columns <- if (scale == "latent") (g - 1L) * J + seq_len(J) else (g - 1L) * P + seq_len(P)
     red <- if (scale == "latent") blocks[[g]]$reduced else blocks[[g]]$projection
@@ -668,7 +702,9 @@ estimate_paired <- function(data, design, terms = NULL, groups = NULL, vcov = c(
   }
   out$estimate[out$failure_reason %in% c("non_estimable", "nonconvergence")] <- NA_real_
   if (n <= k) out$failure_reason[is.na(out$failure_reason)] <- "no_residual_df"
-  for (nm in c("std.error", "df", "statistic", "p.value", "conf.low", "conf.high")) out[[nm]] <- NA_real_
+  for (nm in c("std.error", "df", "statistic", "p.value", "conf.low", "conf.high")) {
+    out[[nm]] <- NA_real_
+  }
   out$scale <- scale
   out$vcov <- vcov
   out$inference <- inference
@@ -703,8 +739,11 @@ estimate_paired <- function(data, design, terms = NULL, groups = NULL, vcov = c(
   V[failed, ] <- NA_real_
   V[, failed] <- NA_real_
   attr(out, "vcov") <- V
-  attr(out, "diagnostics") <- list(numerics = numerics,
-    groups = lapply(blocks, function(b) if (is.null(b$fit)) list(status = "absent") else b$fit$diagnostics),
+  attr(out, "diagnostics") <- list(
+    numerics = numerics,
+    groups = lapply(blocks, function(b) {
+      if (is.null(b$fit)) list(status = "absent") else b$fit$diagnostics
+    }),
     covariance = covariance_diagnostics)
   out
 }
