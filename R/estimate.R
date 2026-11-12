@@ -223,6 +223,14 @@ estimate_amce <- function(data, design, groups = NULL, vcov = c("CR1", "CR2"),
   out
 }
 
+# Largest power of two not above each x, capped at the largest finite one (2^1023), or 1 for a zero,
+# missing or nonfinite x. Dividing by it is exact.
+power2_scale <- function(x) {
+  scale <- 2^pmin(floor(log2(x)), 1023)
+  scale[!is.finite(scale) | scale == 0] <- 1
+  scale
+}
+
 # Shared preflight: configuration errors must stop power_sim(), not become failed experiments.
 check_inference <- function(vcov, inference, alpha) {
   if (is.null(inference)) inference <- if (vcov == "CR2") "Satterthwaite" else "normal"

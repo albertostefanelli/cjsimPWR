@@ -104,6 +104,10 @@ rate for a null target), Type S and Type M errors, coverage, bias and standard e
 with its Monte Carlo standard error.
 }
 \details{
+When there are valid runs, estimates, standard errors, \code{truth} and its reference precision
+must be zero or between 1e-75 and 1e75 in size. More extreme units stop with an error. This
+conservative range limits overflow and underflow in squared and fourth-power moments.
+
 A run is significant when \verb{|estimate / std.error|} exceeds the critical value. Runs with a
 missing or infinite estimate, a missing, infinite or non-positive standard error, or unavailable
 per-run degrees of freedom are counted in \code{n_failed} and left out of every measure. Measures are

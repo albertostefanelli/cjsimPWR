@@ -36,10 +36,13 @@
   a diagnostic warning. Failed numerical fits remain failures, never nonsignificant results.
 * `alpha` must be at least 1e-10. Long numeric respondent identifiers are compared exactly. Subgroup
   AMCE estimation is robust to outcomes of very different sizes, and a difference involving a nearly
-  perfectly fitted subgroup fails rather than understating its standard error. Coverage and Monte
-  Carlo standard errors stay correct at extreme magnitudes. Calibration with a `tolerance` below 1e-5
-  now converges, fixed-coefficient utility models compute their AMCE targets much faster, and analytic
-  Type M is 1 when all estimates are equal.
+  perfectly fitted subgroup fails rather than understating its standard error. Calibration with a
+  `tolerance` below 1e-5 now converges, fixed-coefficient utility models compute their AMCE targets
+  much faster, and analytic Type M is 1 when all estimates are equal.
+* With valid runs, `summarise_runs()` requires estimates, standard errors, the target and its reference
+  precision to be zero or between 1e-75 and 1e75 in size. Rescale inputs outside this conservative range
+  for squared and fourth-power moments. Nearly equal standard errors and Type M ratios retain
+  nonzero Monte Carlo uncertainty at the lower limits.
 * `estimate_amce()` with `vcov = "CR1"` now clusters correctly when `respondent` is a factor with
   unused levels, as after subsetting a data frame. Unused levels were counted as clusters, which
   made standard errors slightly too small and, with at least as many levels as profile rows,

@@ -18,7 +18,11 @@
 #' @param reference_half_width non-negative number; half-width of the reference interval for `truth`,
 #'   default 0. Used for coverage sensitivity bounds; see Details.
 #'
-#' @details A run is significant when `|estimate / std.error|` exceeds the critical value. Runs with a
+#' @details When there are valid runs, estimates, standard errors, `truth` and its reference precision
+#'   must be zero or between 1e-75 and 1e75 in size. More extreme units stop with an error. This
+#'   conservative range limits overflow and underflow in squared and fourth-power moments.
+#'
+#'   A run is significant when `|estimate / std.error|` exceeds the critical value. Runs with a
 #'   missing or infinite estimate, a missing, infinite or non-positive standard error, or unavailable
 #'   per-run degrees of freedom are counted in `n_failed` and left out of every measure. Measures are
 #'   conditional on the `n_valid` runs with valid inference; `n_runs` counts all attempted runs.
@@ -141,6 +145,15 @@ summarise_runs <- function(estimate, std.error, truth, alpha = 0.05, df = Inf,
   se <- std.error[ok]
   df <- df[ok]
   n <- length(est)
+  # Leave headroom for squared and fourth-power moments, including Type M ratios.
+  # Without valid runs nothing is computed, so failed runs are still reported.
+  if (n > 0) {
+    magnitude <- c(abs(truth), abs(est), se, reference_mcse, reference_half_width)
+    if (any(magnitude > 1e75 | (magnitude > 0 & magnitude < 1e-75))) {
+      stop("estimates, standard errors, `truth` and its reference precision must be zero or ",
+           "between 1e-75 and 1e75 in size; rescale their units.", call. = FALSE)
+    }
+  }
   crit <- ifelse(is.infinite(df), stats::qnorm(1 - alpha / 2), stats::qt(1 - alpha / 2, df))
 
   sig <- abs(est / se) > crit
@@ -150,26 +163,30 @@ summarise_runs <- function(estimate, std.error, truth, alpha = 0.05, df = Inf,
   ratio <- if (undefined_sm) numeric() else abs(est[sig]) / abs(truth)
   type_s <- if (undefined_sm || n_sig == 0) NA_real_ else mean(sign(est[sig]) != sign(truth))
   type_m <- if (undefined_sm || n_sig == 0) NA_real_ else mean(ratio)
-  # Each run is compared in units of an exact power of two near its own largest value. Ordinary
-  # decisions are unchanged, values near the largest finite number cannot overflow to Inf <= Inf, and
-  # runs of very different sizes cannot underflow one another. The reference half-width enters only
-  # the sensitivity bounds.
-  run_scale <- power2_scale(pmax(abs(est), abs(truth), se))
-  coverage <- proportion(abs(est / run_scale - truth / run_scale) <= crit * (se / run_scale))
-  ref_scale <- power2_scale(pmax(abs(est), abs(truth), se, reference_half_width))
-  distance <- abs(est / ref_scale - truth / ref_scale)
-  half_width <- crit * (se / ref_scale)
-  reference <- reference_half_width / ref_scale
-
-  # Exact power-of-two scaling keeps ordinary results bit-identical while extreme units cannot
-  # overflow or underflow the squared and fourth-power moments below.
-  est_scale <- power2_scale(if (n > 0) max(abs(est)) else 0)
-  se_scale <- power2_scale(if (n > 0) max(se) else 0)
-  emp_se <- if (n > 1) est_scale * stats::sd(est / est_scale) else NA_real_
-  model_se_scaled <- if (n > 0) sqrt(mean((se / se_scale)^2)) else NA_real_
-  model_se <- se_scale * model_se_scaled
-  bias_scale <- power2_scale(max(emp_se, reference_mcse))
-  ratio_scale <- power2_scale(if (length(ratio)) max(ratio) else 0)
+  type_m_mcse <- NA_real_
+  if (!is.na(type_m) && n_sig > 1) {
+    ratio_sd <- stats::sd(ratio)
+    # Very small, nearly equal ratios can lose their variance before the square root.
+    if (ratio_sd < sqrt(.Machine$double.xmin) && any(ratio != ratio[1L])) {
+      ratio_sd <- stats::sd(abs(est[sig])) / abs(truth)
+    }
+    type_m_mcse <- ratio_sd / sqrt(n_sig)
+  }
+  # Distance of each estimate from the target, against its confidence-interval half-width.
+  distance <- abs(est - truth)
+  half_width <- crit * se
+  coverage <- proportion(distance <= half_width)
+  emp_se <- if (n > 1) stats::sd(est) else NA_real_
+  model_se <- if (n > 0) sqrt(mean(se^2)) else NA_real_
+  model_se_mcse <- NA_real_
+  if (n > 1) {
+    variance <- stats::var(se^2)
+    # Nearly equal SEs at the lower unit limit can still underflow this fourth-power moment.
+    # Divide before taking the variance in that case, keeping ordinary results unchanged.
+    model_se_mcse <- if (variance < .Machine$double.xmin && any(se != se[1L])) {
+      stats::sd(se^2 / model_se) / (2 * sqrt(n))
+    } else sqrt(variance / (4 * n * model_se^2))
+  }
   analytic <- closed_form_measures(truth, emp_se, alpha)
 
   out <- data.frame(
@@ -180,22 +197,18 @@ summarise_runs <- function(estimate, std.error, truth, alpha = 0.05, df = Inf,
     type_s = type_s,
     type_s_mcse = proportion_mcse(type_s, n_sig),
     type_m = type_m,
-    type_m_mcse = if (is.na(type_m) || n_sig < 2) NA_real_ else {
-      ratio_scale * stats::sd(ratio / ratio_scale) / sqrt(n_sig)
-    },
+    type_m_mcse = type_m_mcse,
     coverage = coverage,
     coverage_mcse = proportion_mcse(coverage, n),
-    coverage_reference_lower = proportion(distance + reference <= half_width),
-    coverage_reference_upper = proportion(pmax(0, distance - reference) <= half_width),
+    coverage_reference_lower = proportion(distance + reference_half_width <= half_width),
+    coverage_reference_upper = proportion(pmax(0, distance - reference_half_width) <= half_width),
     mean_estimate = if (n > 0) mean(est) else NA_real_,
     bias = if (n > 0) mean(est) - truth else NA_real_,
-    bias_mcse = bias_scale * sqrt((emp_se / bias_scale)^2 / n + (reference_mcse / bias_scale)^2),
+    bias_mcse = sqrt(emp_se^2 / n + reference_mcse^2),
     emp_se = emp_se,
     emp_se_mcse = if (n > 1) emp_se / sqrt(2 * (n - 1)) else NA_real_,
     model_se = model_se,
-    model_se_mcse = if (n > 1) {
-      se_scale * sqrt(stats::var((se / se_scale)^2) / (4 * n * model_se_scaled^2))
-    } else NA_real_,
+    model_se_mcse = model_se_mcse,
     analytic_power = if (null) NA_real_ else analytic$power,
     analytic_type_s = if (undefined_sm) NA_real_ else analytic$type_s,
     analytic_type_m = if (undefined_sm) NA_real_ else analytic$type_m,
@@ -206,14 +219,6 @@ summarise_runs <- function(estimate, std.error, truth, alpha = 0.05, df = Inf,
   )
   class(out) <- c("cj_performance", class(out))
   out
-}
-
-# Largest power of two not above each x, capped at the largest finite one (2^1023), or 1 for a zero,
-# missing or nonfinite x. Dividing by it is exact.
-power2_scale <- function(x) {
-  scale <- 2^pmin(floor(log2(x)), 1023)
-  scale[!is.finite(scale) | scale == 0] <- 1
-  scale
 }
 
 # Share of TRUE values; NA when there are none.
