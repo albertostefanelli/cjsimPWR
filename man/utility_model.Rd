@@ -50,6 +50,9 @@ respondent-level variation. Truth calculations preserve the caller's random-numb
 reference streams separate from simulated experiments. They stop with an error under the
 \code{"Box-Muller"} normal generator; see the Reproducibility section of \code{\link[=power_sim]{power_sim()}}.
 
+Numerical paired targets also stop when standardized predictors cannot be squared safely or
+group-difference reference uncertainty overflows. Check the score units and match shares.
+
 \code{coef} describes how preferences generate choices; it is not a probability difference. In the truth
 table, \code{input} retains the specified coefficient mean when the analysis coding matches it, while
 \code{true_value} is the population target used for bias and coverage. These can differ when coefficients

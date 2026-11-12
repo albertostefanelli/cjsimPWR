@@ -43,6 +43,9 @@
   precision to be zero or between 1e-75 and 1e75 in size. Rescale inputs outside this conservative range
   for squared and fourth-power moments. Nearly equal standard errors and Type M ratios retain
   nonzero Monte Carlo uncertainty at the lower limits.
+* Numerical paired population targets of `utility_model()` stop when standardized predictors are too
+  extreme to square safely, or when a group difference has nonfinite truth or reference uncertainty.
+  Check the score units and match shares.
 * `estimate_amce()` with `vcov = "CR1"` now clusters correctly when `respondent` is a factor with
   unused levels, as after subsetting a data frame. Unused levels were counted as clusters, which
   made standard errors slightly too small and, with at least as many levels as profile rows,

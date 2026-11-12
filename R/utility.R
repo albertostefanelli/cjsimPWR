@@ -140,6 +140,9 @@ term_rating <- function(attribute, mean, sd, coef, coef_sd = 0) {
 #'   reference streams separate from simulated experiments. They stop with an error under the
 #'   `"Box-Muller"` normal generator; see the Reproducibility section of [power_sim()].
 #'
+#'   Numerical paired targets also stop when standardized predictors cannot be squared safely or
+#'   group-difference reference uncertainty overflows. Check the score units and match shares.
+#'
 #'   `coef` describes how preferences generate choices; it is not a probability difference. In the truth
 #'   table, `input` retains the specified coefficient mean when the analysis coding matches it, while
 #'   `true_value` is the population target used for bias and coverage. These can differ when coefficients

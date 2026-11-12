@@ -199,55 +199,29 @@ latent_paired_reference <- function(model, analysis, g, streams, support, gram) 
   pop_scale <- sqrt(diag(gram))
   square <- numeric(J)
   R <- matrix(0, 0, J)
-  robust_rms <- FALSE
   latent_walk_cells(model, analysis, g, streams, support, function(X, eta, w, b) {
     Z <- sweep(X, 2L, pop_scale, "/")
     if (any(!is.finite(X)) || any(!is.finite(eta))) {
       latent_truth_error("nonfinite paired reference cells.")
     }
+    # Standardized predictors are squared below, so sizes whose squares overflow or vanish are refused.
     magnitude <- abs(Z)
     if (any(!is.finite(Z)) || any(magnitude > sqrt(.Machine$double.xmax)) ||
         any(magnitude > 0 & magnitude < sqrt(.Machine$double.xmin)) || any(X != 0 & Z == 0)) {
-      robust_rms <<- TRUE
+      latent_truth_error(paste("paired reference predictors are too large or too small to square;",
+                               "check the score units and match shares."))
     }
-    if (robust_rms) return(invisible(NULL))
     square <<- square + colSums(Z^2 * w) / B
     decomposition <- qr(rbind(R, Z * sqrt(w)), LAPACK = FALSE)
     R <<- qr.R(decomposition)[, order(decomposition$pivot), drop = FALSE]
   })
-  if (robust_rms) {
-    # Max-factored block RMSs and a scaled hypotenuse accumulator avoid squaring
-    # enormous/vanishing population-standardized cells before their tiny weights.
-    scales <- numeric(J)
-    latent_walk_cells(model, analysis, g, streams, support, function(X, eta, w, b) {
-      block <- paired_rms(X, w / B)
-      maximum <- pmax(scales, block)
-      good <- maximum > 0
-      next_scale <- numeric(J)
-      next_scale[good] <- maximum[good] * sqrt((scales[good] / maximum[good])^2 +
-                                               (block[good] / maximum[good])^2)
-      scales <<- next_scale
-    })
-  } else {
-    scales <- pop_scale * sqrt(square)
-  }
+  scales <- pop_scale * sqrt(square)
   if (any(!is.finite(scales)) || any(scales <= 0)) {
     latent_truth_error("paired sampled reference has deficient rank; increase the reference budget.",
                        list(scales = scales))
   }
-  if (robust_rms) {
-    R <- matrix(0, 0, J)
-    latent_walk_cells(model, analysis, g, streams, support, function(X, eta, w, b) {
-      weighted <- sweep(X, 2L, scales, "/") * sqrt(w)
-      if (any(!is.finite(weighted))) latent_truth_error("nonfinite scaled paired reference design.")
-      decomposition <- qr(rbind(R, weighted), LAPACK = FALSE)
-      R <<- qr.R(decomposition)[, order(decomposition$pivot), drop = FALSE]
-    })
-    rank <- qr(R, tol = paired_numerics()$rank_tol, LAPACK = FALSE)$rank
-  } else {
-    rank <- qr(sweep(R, 2L, sqrt(square), "/"), tol = paired_numerics()$rank_tol,
-               LAPACK = FALSE)$rank
-  }
+  rank <- qr(sweep(R, 2L, sqrt(square), "/"), tol = paired_numerics()$rank_tol,
+             LAPACK = FALSE)$rank
   if (rank != J) {
     latent_truth_error("paired sampled reference has deficient rank; increase the reference budget.",
                        list(rank = rank, columns = J, scales = scales))
@@ -281,7 +255,6 @@ latent_paired_reference <- function(model, analysis, g, streams, support, gram) 
     start = if (is.null(warm_failure)) start$method else "zero fallback",
     attempted_start = start$method, warm_start_failure = warm_failure,
     method = if (is.null(support)) "independent paired cells" else "exact finite support",
-    rms_method = if (robust_rms) "max-factored replay" else "population-scaled RMS",
     batches = if (is.null(support)) B else 0L,
     cells_per_batch = if (is.null(support)) model$control$paired_cells else support$cells))
   diagnostic$raw_coefficients <- fit$gamma / scales
@@ -725,10 +698,10 @@ latent_truth <- function(model, analysis = NULL, amce = FALSE) {
         a$reference_group <- model$groups[1L]
         a$true_value <- a$true_value - b$true_value
         a$input <- a$input - b$input
-        if (any(!is.finite(a$true_value))) latent_truth_error("nonfinite group truth difference.")
-        # Exact power-of-two scaling: large finite MCSEs cannot overflow when squared.
-        s <- power2_scale(pmax(a$reference_mcse, b$reference_mcse))
-        a$reference_mcse <- s * sqrt((a$reference_mcse / s)^2 + (b$reference_mcse / s)^2)
+        a$reference_mcse <- sqrt(a$reference_mcse^2 + b$reference_mcse^2)
+        if (any(!is.finite(c(a$true_value, a$reference_mcse)))) {
+          latent_truth_error("nonfinite group truth difference.")
+        }
         a$reference_half_width <- a$reference_half_width + b$reference_half_width
         a$solver_error <- a$solver_error + b$solver_error
         a$roundoff_guard <- a$roundoff_guard + b$roundoff_guard
