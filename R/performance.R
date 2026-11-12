@@ -19,8 +19,9 @@
 #'   default 0. Used for coverage sensitivity bounds; see Details.
 #'
 #' @details When there are valid runs, estimates, standard errors, `truth` and its reference precision
-#'   must be zero or between 1e-75 and 1e75 in size. More extreme units stop with an error. This
-#'   conservative range limits overflow and underflow in squared and fourth-power moments.
+#'   must be zero or between 1e-65 and 1e65 in size. More extreme units stop with an error. Within
+#'   this range the squared and fourth-power moments below can be represented, also for values that
+#'   are nearly equal.
 #'
 #'   A run is significant when `|estimate / std.error|` exceeds the critical value. Runs with a
 #'   missing or infinite estimate, a missing, infinite or non-positive standard error, or unavailable
@@ -145,13 +146,14 @@ summarise_runs <- function(estimate, std.error, truth, alpha = 0.05, df = Inf,
   se <- std.error[ok]
   df <- df[ok]
   n <- length(est)
-  # Leave headroom for squared and fourth-power moments, including Type M ratios.
+  # Within 1e-65 to 1e65 the squared and fourth-power moments below neither overflow nor vanish,
+  # even for standard errors or Type M ratios that agree to the last digit.
   # Without valid runs nothing is computed, so failed runs are still reported.
   if (n > 0) {
     magnitude <- c(abs(truth), abs(est), se, reference_mcse, reference_half_width)
-    if (any(magnitude > 1e75 | (magnitude > 0 & magnitude < 1e-75))) {
+    if (any(magnitude > 1e65 | (magnitude > 0 & magnitude < 1e-65))) {
       stop("estimates, standard errors, `truth` and its reference precision must be zero or ",
-           "between 1e-75 and 1e75 in size; rescale their units.", call. = FALSE)
+           "between 1e-65 and 1e65 in size; rescale their units.", call. = FALSE)
     }
   }
   crit <- ifelse(is.infinite(df), stats::qnorm(1 - alpha / 2), stats::qt(1 - alpha / 2, df))
@@ -163,30 +165,12 @@ summarise_runs <- function(estimate, std.error, truth, alpha = 0.05, df = Inf,
   ratio <- if (undefined_sm) numeric() else abs(est[sig]) / abs(truth)
   type_s <- if (undefined_sm || n_sig == 0) NA_real_ else mean(sign(est[sig]) != sign(truth))
   type_m <- if (undefined_sm || n_sig == 0) NA_real_ else mean(ratio)
-  type_m_mcse <- NA_real_
-  if (!is.na(type_m) && n_sig > 1) {
-    ratio_sd <- stats::sd(ratio)
-    # Very small, nearly equal ratios can lose their variance before the square root.
-    if (ratio_sd < sqrt(.Machine$double.xmin) && any(ratio != ratio[1L])) {
-      ratio_sd <- stats::sd(abs(est[sig])) / abs(truth)
-    }
-    type_m_mcse <- ratio_sd / sqrt(n_sig)
-  }
   # Distance of each estimate from the target, against its confidence-interval half-width.
   distance <- abs(est - truth)
   half_width <- crit * se
   coverage <- proportion(distance <= half_width)
   emp_se <- if (n > 1) stats::sd(est) else NA_real_
   model_se <- if (n > 0) sqrt(mean(se^2)) else NA_real_
-  model_se_mcse <- NA_real_
-  if (n > 1) {
-    variance <- stats::var(se^2)
-    # Nearly equal SEs at the lower unit limit can still underflow this fourth-power moment.
-    # Divide before taking the variance in that case, keeping ordinary results unchanged.
-    model_se_mcse <- if (variance < .Machine$double.xmin && any(se != se[1L])) {
-      stats::sd(se^2 / model_se) / (2 * sqrt(n))
-    } else sqrt(variance / (4 * n * model_se^2))
-  }
   analytic <- closed_form_measures(truth, emp_se, alpha)
 
   out <- data.frame(
@@ -197,7 +181,7 @@ summarise_runs <- function(estimate, std.error, truth, alpha = 0.05, df = Inf,
     type_s = type_s,
     type_s_mcse = proportion_mcse(type_s, n_sig),
     type_m = type_m,
-    type_m_mcse = type_m_mcse,
+    type_m_mcse = if (is.na(type_m) || n_sig < 2) NA_real_ else stats::sd(ratio) / sqrt(n_sig),
     coverage = coverage,
     coverage_mcse = proportion_mcse(coverage, n),
     coverage_reference_lower = proportion(distance + reference_half_width <= half_width),
@@ -208,7 +192,7 @@ summarise_runs <- function(estimate, std.error, truth, alpha = 0.05, df = Inf,
     emp_se = emp_se,
     emp_se_mcse = if (n > 1) emp_se / sqrt(2 * (n - 1)) else NA_real_,
     model_se = model_se,
-    model_se_mcse = model_se_mcse,
+    model_se_mcse = if (n > 1) sqrt(stats::var(se^2) / (4 * n * model_se^2)) else NA_real_,
     analytic_power = if (null) NA_real_ else analytic$power,
     analytic_type_s = if (undefined_sm) NA_real_ else analytic$type_s,
     analytic_type_m = if (undefined_sm) NA_real_ else analytic$type_m,

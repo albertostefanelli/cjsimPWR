@@ -40,9 +40,9 @@
   `tolerance` below 1e-5 now converges, fixed-coefficient utility models compute their AMCE targets
   much faster, and analytic Type M is 1 when all estimates are equal.
 * With valid runs, `summarise_runs()` requires estimates, standard errors, the target and its reference
-  precision to be zero or between 1e-75 and 1e75 in size. Rescale inputs outside this conservative range
-  for squared and fourth-power moments. Nearly equal standard errors and Type M ratios retain
-  nonzero Monte Carlo uncertainty at the lower limits.
+  precision to be zero or between 1e-65 and 1e65 in size, and stops otherwise; rescale such inputs.
+  Within this range its squared and fourth-power moments can be represented, so nearly equal
+  standard errors and Type M ratios keep a nonzero Monte Carlo uncertainty.
 * Numerical paired population targets of `utility_model()` stop when standardized predictors are too
   extreme to square safely, or when a group difference has nonfinite truth or reference uncertainty.
   Check the score units and match shares.
