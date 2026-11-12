@@ -2,8 +2,7 @@
 paired_numerics <- function() {
   list(rank_tol = 1e-10, gram_rcond_min = 1e-12, estimability_tol = 1e-8,
        information_rcond_min = 1e-12, maxit = 100L, score_tol = 1e-10,
-       step_tol = 1e-10, line_search_max_halvings = 30L, armijo = 1e-4, flat_gain = 1e-8,
-       fallback_maxit = 1000L, fallback_factr = 1, fallback_pgtol = 1e-12)
+       step_tol = 1e-10, line_search_max_halvings = 30L, armijo = 1e-4, flat_gain = 1e-8)
 }
 
 # Scaling before squaring avoids overflow for otherwise representable column RMSs.
@@ -245,72 +244,8 @@ paired_model_data <- function(data, design, terms, groups) {
        }), analysis = analysis, groups = groups, amce = amce)
 }
 
-paired_overlap_result <- function(ok, stage, message = NULL, error = FALSE, ...) {
-  list(ok = isTRUE(ok),
-       diagnostics = c(list(stage = stage, message = message, error = error), list(...)))
-}
-
-# Q can be supplied from the unweighted design QR, with the outcome signs applied to its rows.
-paired_verify_overlap <- function(M, w, Q = NULL) {
-  stage <- "weights"
-  tryCatch({
-    if (!length(w) || length(w) != nrow(M) || any(!is.finite(w)) || any(!is.finite(M))) {
-      return(paired_overlap_result(FALSE, stage, "nonfinite or invalid weights/design", TRUE))
-    }
-    if (max(w) <= 0) return(paired_overlap_result(FALSE, stage, "nonpositive candidate weights"))
-    w <- w / max(w)
-    stage <- "projection"
-    if (is.null(Q)) Q <- qr.Q(qr(M, LAPACK = FALSE))[, seq_len(ncol(M)), drop = FALSE]
-    a <- w - drop(Q %*% crossprod(Q, w))
-    tau <- 100 * nrow(M) * .Machine$double.eps
-    if (any(!is.finite(a))) {
-      return(paired_overlap_result(FALSE, stage, "nonfinite projected weights", TRUE))
-    }
-    if (min(a) <= max(tau, 1e-6 * max(abs(a)))) {
-      return(paired_overlap_result(FALSE, stage, "positivity guard failed",
-                                   min_weight = min(a), tolerance = tau))
-    }
-    stage <- "balance"
-    balance <- max(abs(crossprod(M, a)) / colSums(abs(M) * a))
-    if (!is.finite(balance)) return(paired_overlap_result(FALSE, stage, "nonfinite balance", TRUE))
-    paired_overlap_result(balance <= tau, stage, if (balance > tau) "balance guard failed" else NULL,
-                          min_weight = min(a), balance = balance, tolerance = tau)
-  }, error = function(e) paired_overlap_result(FALSE, stage, conditionMessage(e), TRUE))
-}
-
-quadratic_overlap <- function(B, numerics = paired_numerics()) {
-  stage <- "row_scaling"
-  tryCatch({
-    if (any(!is.finite(B))) stop("nonfinite overlap design")
-    magnitude <- apply(abs(B), 1L, max)
-    A <- B[magnitude > 0, , drop = FALSE] / magnitude[magnitude > 0]
-    if (!nrow(A)) stop("no nonzero overlap rows")
-    A <- A / sqrt(rowSums(A^2))
-    stage <- "column_qr"
-    q <- qr(A, LAPACK = FALSE)
-    if (q$rank != ncol(A)) stop("rank deficient overlap design")
-    A <- qr.Q(q)[, seq_len(ncol(A)), drop = FALSE]
-    A <- A / sqrt(rowSums(A^2))
-    stage <- "optim"
-    fn <- function(u) {
-      value <- sum(crossprod(A, 1 + u)^2) / 2
-      if (!is.finite(value)) stop("nonfinite overlap objective")
-      value
-    }
-    gr <- function(u) {
-      value <- drop(A %*% crossprod(A, 1 + u))
-      if (any(!is.finite(value))) stop("nonfinite overlap gradient")
-      value
-    }
-    fit <- stats::optim(rep(0, nrow(A)), fn, gr, method = "L-BFGS-B", lower = 0,
-                        control = list(maxit = numerics$fallback_maxit,
-                                       factr = numerics$fallback_factr, pgtol = numerics$fallback_pgtol))
-    out <- paired_verify_overlap(A, 1 + fit$par)
-    out$diagnostics$optimizer_status <- fit$convergence
-    out
-  }, error = function(e) paired_overlap_result(FALSE, stage, conditionMessage(e), TRUE))
-}
-
+# Fit one group. A fit counts only when the solver converges: with separated outcomes no finite
+# estimate exists, the coefficients grow without settling, and the solver stops unconverged.
 fit_paired_block <- function(X, y) {
   numerics <- paired_numerics()
   scales <- paired_rms(X)
@@ -327,28 +262,10 @@ fit_paired_block <- function(X, y) {
   diagnostics$correction_original <- diagnostics$correction / scales
   diagnostics$largest_standardized_coefficient <- if (length(fit$gamma)) max(abs(fit$gamma)) else 0
   diagnostics$smallest_fitted_tail <- min(stats::plogis(-abs(eta)))
-  diagnostics$overlap <- list()
   accepted <- fit$status == "converged"
   if (accepted && any(!is.finite(c(fit$gamma / scales, diagnostics$correction_original)))) {
     accepted <- FALSE
     diagnostics$status <- "nonfinite"
-  }
-  if (accepted && ncol(X)) {
-    signs <- 2 * y - 1
-    B <- Xs * signs
-    fast <- tryCatch({
-      Q <- qr.Q(qr(Xs, tol = numerics$rank_tol, LAPACK = FALSE))[, seq_len(ncol(Xs)), drop = FALSE] *
-        signs
-      paired_verify_overlap(B, stats::plogis(-signs * eta), Q)
-    }, error = function(e) paired_overlap_result(FALSE, "design_qr", conditionMessage(e), TRUE))
-    diagnostics$overlap$fast <- fast
-    accepted <- fast$ok
-    if (!accepted) {
-      fallback <- quadratic_overlap(B, numerics)
-      diagnostics$overlap$fallback <- fallback
-      accepted <- fallback$ok
-    }
-    if (!accepted) diagnostics$status <- "no_certificate"
   }
   list(coefficients = if (accepted) fit$gamma / scales else rep(NA_real_, ncol(X)),
        eta = if (accepted) eta else rep(NA_real_, nrow(X)),
@@ -590,8 +507,11 @@ paired_covariance <- function(blocks, C, eligible, n, G, k, scale, vcov, inferen
 #' @return A data frame of group effects followed by group-minus-first-group differences, with
 #'   estimate, standard error, inference, `term`, `scale`, and the diagnostics of [estimate_amce()].
 #'   Covariance in output order is attached as `vcov`. Failed rows retain a `failure_reason`;
-#'   `nonconvergence` includes a failed numerical fit or unverified finite MLE. Solver and overlap
-#'   details are attached as `diagnostics`. Group failures do not invalidate unrelated groups.
+#'   `nonconvergence` marks a fit that did not converge, as when the outcomes are separated and no
+#'   finite estimate exists. Solver details are attached as `diagnostics`. Group failures do not
+#'   invalidate unrelated groups. A warning is given when a converged fit has fitted choice
+#'   probabilities within 1e-6 of 0 or 1. This can indicate near separation or a wide predictor range;
+#'   inspect the fit, since the coefficients and their standard errors may be unreliable.
 #' @details Probability output has an AMCE interpretation under independent uniform assignment;
 #'   otherwise it is the stated regression projection. Probability CR1 includes both sources of
 #'   uncertainty. No intercept is added to the paired logit. Labels are never interpreted as formulas.
@@ -745,5 +665,17 @@ estimate_paired <- function(data, design, terms = NULL, groups = NULL, vcov = c(
       if (is.null(b$fit)) list(status = "absent") else b$fit$diagnostics
     }),
     covariance = covariance_diagnostics)
+  # Extreme fitted probabilities can indicate near separation or a wide predictor range.
+  # Warn without treating them as proof that no finite estimate exists.
+  near <- vapply(blocks, function(b) {
+    !is.null(b$fit) && is.na(b$fit$failure_reason) && b$fit$diagnostics$smallest_fitted_tail < 1e-6
+  }, logical(1))
+  if (any(near)) {
+    warning("fitted choice probabilities within 1e-6 of 0 or 1",
+            if (ng > 1L) paste0(" in group(s) ", paste(input$groups[near], collapse = ", ")),
+            ": the outcomes may be almost separated, so the coefficients and their standard errors ",
+            "may be unreliable. A predictor that nearly determines the choices, or one with a ",
+            "very wide range, can cause this.", call. = FALSE)
+  }
   out
 }

@@ -48,8 +48,11 @@ is available only on the latent scale.}
 A data frame of group effects followed by group-minus-first-group differences, with
 estimate, standard error, inference, \code{term}, \code{scale}, and the diagnostics of \code{\link[=estimate_amce]{estimate_amce()}}.
 Covariance in output order is attached as \code{vcov}. Failed rows retain a \code{failure_reason};
-\code{nonconvergence} includes a failed numerical fit or unverified finite MLE. Solver and overlap
-details are attached as \code{diagnostics}. Group failures do not invalidate unrelated groups.
+\code{nonconvergence} marks a fit that did not converge, as when the outcomes are separated and no
+finite estimate exists. Solver details are attached as \code{diagnostics}. Group failures do not
+invalidate unrelated groups. A warning is given when a converged fit has fitted choice
+probabilities within 1e-6 of 0 or 1. This can indicate near separation or a wide predictor range;
+inspect the fit, since the coefficients and their standard errors may be unreliable.
 }
 \description{
 Fits a no-intercept logit to profile-1 minus profile-2 predictors. Positive coefficients favour

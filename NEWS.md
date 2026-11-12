@@ -24,7 +24,9 @@
   Respondent preferences persist across tasks, and simulation exposes scores for the displayed levels.
 * `estimate_paired()` fits a no-intercept logit of paired predictor differences with respondent-clustered
   CR1 or CR2 inference. CR1 also reports fitted AMCE projections with uncertainty from both the logit
-  fit and sampled profiles. Group failures retain unrelated groups and contrasts.
+  fit and sampled profiles. Group failures retain unrelated groups and contrasts. A warning flags
+  converged fits whose fitted choice probabilities are within 1e-6 of 0 or 1. Near separation or a
+  wide predictor range can make estimates unreliable.
 * `power_sim(model = ...)` reuses calibrated or latent prepared models. Latent models support paired
   estimation, ordinary AMCE estimation, or both on the same experiments. Probability output compares
   both estimators against the true population AMCE; latent output uses the selected analysis's
