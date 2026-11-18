@@ -217,6 +217,10 @@ proportion_mcse <- function(p, n) {
 
 #' @export
 print.cj_performance <- function(x, digits = 3, ...) {
+  if (!nrow(x)) {
+    cat("No performance rows to display.\n")
+    return(invisible(x))
+  }
   labels <- c(power = "Power", type_1_error = "Type I error", type_s = "Type S", type_m = "Type M",
               coverage = "Coverage")
   out <- data.frame(row.names = seq_len(nrow(x)))
@@ -226,7 +230,7 @@ print.cj_performance <- function(x, digits = 3, ...) {
     if ("estimator" %in% names(x) && all(is.na(x[[col]]))) next
     out[[col]] <- if (col %in% c("true_amce", "true_value")) round(x[[col]], 4) else x[[col]]
   }
-  if ("in_analysis" %in% names(x) && any(!x$in_analysis)) out$in_analysis <- x$in_analysis
+  if ("in_analysis" %in% names(x) && any(!x$in_analysis, na.rm = TRUE)) out$in_analysis <- x$in_analysis
   for (m in names(labels)) {
     if (m %in% names(x) && !all(is.na(x[[m]]))) {
       out[[labels[[m]]]] <- format_with_mcse(x[[m]], x[[paste0(m, "_mcse")]], digits)
