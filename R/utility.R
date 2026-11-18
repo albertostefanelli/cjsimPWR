@@ -254,6 +254,7 @@ normalize_terms <- function(design, terms, groups) {
       stop("term ", i, " must name an attribute in the design: ", paste(attrs, collapse = ", "),
            ".", call. = FALSE)
     }
+    attr <- as.vector(attr) # drop names and classes so stored attributes are plain strings
     default <- if (term$type == "dummy") attr else paste0(attr, "_", term$type)
     nm <- if (supplied[i] == "") default else supplied[i]
     if (term$type == "dummy" && nm != attr) {

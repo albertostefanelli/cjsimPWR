@@ -434,7 +434,8 @@ latent_amce_reference <- function(model, g, streams, support, certified) {
 latent_amce_null <- function(model, g, attribute, level) {
   lv <- model$design$levels[[attribute]]
   l <- match(level, lv)
-  terms <- model$terms[vapply(model$terms, function(t) identical(t$attribute, attribute), logical(1))]
+  terms <- model$terms[vapply(model$terms, function(t) t$attribute == attribute, logical(1))]
+  if (!length(terms)) return(FALSE)
   all(vapply(terms, function(term) {
     if (all(term$coef[g, ] == 0 & term$coef_sd[g, ] == 0)) return(TRUE)
     if (length(lv) == 2L) {
