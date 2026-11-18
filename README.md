@@ -163,27 +163,26 @@ focal <- do.call(rbind, lapply(seq_along(candidates), function(i) {
   perf <- candidates[[i]]$performance[1, ]
   data.frame(
     units = candidate_units[i],
-    power = perf$power,
+    `power (failed)` = sprintf("%.3f (%d)", perf$power, perf$n_failed),
     type_m = perf$type_m,
-    n_valid = perf$n_valid,
-    n_failed = sum(candidates[[i]]$failures$n_failed)
+    check.names = FALSE
   )
 }))
 
 focal
-#>   units     power   type_m n_valid n_failed
-#> 1   200 0.6200000 1.272539     300        0
-#> 2   400 0.8733333 1.111633     300        0
-#> 3   600 0.9700000 1.018522     300        0
-#> 4   800 0.9900000 1.011148     300        0
+#>   units power (failed)   type_m
+#> 1   200      0.620 (0) 1.272539
+#> 2   400      0.873 (0) 1.111633
+#> 3   600      0.970 (0) 1.018522
+#> 4   800      0.990 (0) 1.011148
 ```
 
-Compare `power` against the 80% target and inspect `n_failed` and
-`$failures` for runs without a usable estimate. Near the threshold,
-increase `sim_runs` for more precision before deciding between
-neighbouring candidates. This compares the candidates shown; it does not
-search for, or guarantee, the minimum sample size that reaches the
-target.
+Compare power against the 80% target. The count in parentheses is the
+number of runs that failed for the focal effect. Power uses the runs
+with valid inference. Near the threshold, increase `sim_runs` for more
+precision before deciding between neighbouring candidates. This compares
+the candidates shown; it does not search for, or guarantee, the minimum
+sample size that reaches the target.
 
 <!--
 ## A new approach: paired logit for trade-off designs

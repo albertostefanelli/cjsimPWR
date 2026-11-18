@@ -148,18 +148,18 @@ focal <- do.call(rbind, lapply(seq_along(candidates), function(i) {
   perf <- candidates[[i]]$performance[1, ]
   data.frame(
     units = candidate_units[i],
-    power = perf$power,
+    `power (failed)` = sprintf("%.3f (%d)", perf$power, perf$n_failed),
     type_m = perf$type_m,
-    n_valid = perf$n_valid,
-    n_failed = sum(candidates[[i]]$failures$n_failed)
+    check.names = FALSE
   )
 }))
 
 focal
 ```
 
-Compare `power` against the 80% target and inspect `n_failed` and `$failures` for runs without a usable
-estimate. Near the threshold, increase `sim_runs` for more precision before deciding between
+Compare power against the 80% target. The count in parentheses is the number of runs that failed for
+the focal effect. Power uses the runs with valid inference. Near the threshold, increase `sim_runs`
+for more precision before deciding between
 neighbouring candidates. This compares the candidates shown; it does not search for, or guarantee,
 the minimum sample size that reaches the target.
 
