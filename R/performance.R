@@ -142,7 +142,7 @@ summarise_runs <- function(estimate, std.error, truth, alpha = 0.05, df = Inf,
   n_runs <- length(estimate)
   df <- rep_len(df, n_runs)
   ok <- is.finite(estimate) & is.finite(std.error) & std.error > 0 & !is.na(df)
-  est <- estimate[ok]
+  est <- as.double(estimate[ok])
   se <- std.error[ok]
   df <- df[ok]
   n <- length(est)
