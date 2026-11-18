@@ -4,7 +4,9 @@
 # (https://CRAN.R-project.org/package=retrodesign), Copyright (c) 2018 Andrew G. Timm, MIT License
 # (see inst/COPYRIGHTS). The formulas are the closed forms of Lu, Qiu and Deng (2019).
 # Changes: vectorised over `truth` and `std.error`; Type S and Type M are NA when the true effect is zero;
-# Type M takes its limit 1 when the standard error is zero, where the formula gives Inf / Inf.
+# Type M takes its limit 1 when the standard error is zero, where the formula gives Inf / Inf; power and
+# Type S are computed from |truth / std.error|, so the wrong-sign probability keeps full precision when
+# the true effect is negative.
 #
 # truth      true effect(s)
 # std.error  standard error(s) of the estimate
@@ -17,11 +19,11 @@ closed_form_measures <- function(truth, std.error, alpha = 0.05) {
   A <- truth
   s <- std.error
   z <- stats::qnorm(1 - alpha / 2)
-  p.hi <- 1 - stats::pnorm(z - A / s)
-  p.lo <- stats::pnorm(-z - A / s)
-  power <- p.hi + p.lo
-  typeS <- ifelse(A >= 0, p.lo / power, 1 - (p.lo / power))
   lambda <- A / s
+  correct_sign <- stats::pnorm(abs(lambda) - z)
+  wrong_sign <- stats::pnorm(-abs(lambda) - z)
+  power <- correct_sign + wrong_sign
+  typeS <- wrong_sign / power
   typeM <- (stats::dnorm(lambda + z) + stats::dnorm(lambda - z) +
               lambda * (stats::pnorm(lambda + z) + stats::pnorm(lambda - z) - 1)) /
     (lambda * (1 - stats::pnorm(lambda + z) + stats::pnorm(lambda - z)))
